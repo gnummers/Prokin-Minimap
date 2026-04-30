@@ -4,5 +4,6 @@
 ## Author: Prokin
 ## Version: 1.0.0
 ## SavedVariables: ProkinMinimapDB
+## IconTexture: Interface\AddOns\Prokin-Minimap\Media\ProkinFaceIcon.png
 
 Prokin-Minimap.lua
