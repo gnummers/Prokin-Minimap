@@ -1,0 +1,8 @@
+## Interface: 20505
+## Title: Prokin-Minimap
+## Notes: Squares the minimap for The Burning Crusade Anniversary using the ElvUI mask method.
+## Author: Prokin
+## Version: 1.0.0
+## SavedVariables: ProkinMinimapDB
+
+Prokin-Minimap.lua
