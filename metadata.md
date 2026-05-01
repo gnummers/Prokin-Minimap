@@ -14,7 +14,7 @@
 
 ## Summary
 
-Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, custom icon support, and polished header spacing.
+Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, custom icon support, polished header handling, and a server-time zone label.
 
 ## Description
 
@@ -26,7 +26,7 @@ Features:
 - Reports `GetMinimapShape()` as `SQUARE` for addon compatibility
 - Reapplies the square minimap on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
-- Uses a pfUI-style custom zone label and runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
+- Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
 - Persistent square resizing with a default size of `400x400`
 - Header spacing that keeps the zone text visible when the minimap is enlarged
 - Custom 1 pixel black border around the minimap
@@ -52,8 +52,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.6.zip`
-- **Display Name:** Prokin-Minimap v1.0.6
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.7.zip`
+- **Display Name:** Prokin-Minimap v1.0.7
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -65,6 +65,7 @@ Saved variable:
 - Added refresh hooks for world entry, minimap show, and hybrid minimap loading
 - Added mousewheel minimap zoom support
 - Switched to a pfUI-style custom zone label and fixed the suppression helper so Blizzard header widgets and duplicate zone text are disabled reliably
+- Added a server-time suffix to the custom zone label using `[HH:MM AM/PM]`
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support

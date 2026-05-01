@@ -2,7 +2,7 @@
 ## Title: Prokin-Minimap
 ## Notes: Squares the minimap for The Burning Crusade Anniversary using the ElvUI mask method.
 ## Author: Prokin
-## Version: 1.0.6
+## Version: 1.0.7
 ## SavedVariables: ProkinMinimapDB
 ## IconTexture: Interface\AddOns\Prokin-Minimap\Media\ProkinFaceIcon.png
 

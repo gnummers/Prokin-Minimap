@@ -19,6 +19,8 @@ local zoneHeaderFrame
 local zoneHeaderText
 local hiddenZoneHeaderParent
 local eventFrame
+local zoneTimeElapsed = 0
+local lastZoneTimeSuffix
 
 local function Noop() end
 
@@ -158,14 +160,45 @@ local function EnsureHiddenZoneHeaderParent()
 	hiddenZoneHeaderParent:Hide()
 end
 
+local function GetServerTimeSuffix()
+	local hour, minute = GetGameTime()
+	if type(hour) ~= 'number' or type(minute) ~= 'number' then
+		return ''
+	end
+
+	local meridiem = hour >= 12 and 'PM' or 'AM'
+	hour = hour % 12
+
+	if hour == 0 then
+		hour = 12
+	end
+
+	return string.format('[%02d:%02d %s]', hour, minute, meridiem)
+end
+
+local function GetZoneHeaderText()
+	local zoneText = GetMinimapZoneText and GetMinimapZoneText() or ''
+	if zoneText == '' then
+		return ''
+	end
+
+	local timeSuffix = GetServerTimeSuffix()
+	if timeSuffix ~= '' then
+		return string.format('%s %s', zoneText, timeSuffix)
+	end
+
+	return zoneText
+end
+
 local function UpdateZoneHeaderText()
 	EnsureCustomZoneHeader()
 	if not zoneHeaderFrame or not zoneHeaderText then
 		return
 	end
 
-	local text = GetMinimapZoneText and GetMinimapZoneText() or ''
-	zoneHeaderText:SetText(text or '')
+	local text = GetZoneHeaderText()
+	zoneHeaderText:SetText(text)
+	lastZoneTimeSuffix = GetServerTimeSuffix()
 
 	local textHeight = math.ceil(zoneHeaderText:GetStringHeight() or 0)
 	if textHeight < 1 then
@@ -173,7 +206,7 @@ local function UpdateZoneHeaderText()
 	end
 
 	zoneHeaderFrame:SetHeight(textHeight)
-	zoneHeaderFrame:SetShown((text or '') ~= '')
+	zoneHeaderFrame:SetShown(text ~= '')
 end
 
 local function ApplyZoneLayout()
@@ -507,4 +540,17 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 	end
 
 	RefreshMinimap()
+end)
+eventFrame:SetScript('OnUpdate', function(_, elapsed)
+	zoneTimeElapsed = zoneTimeElapsed + elapsed
+	if zoneTimeElapsed < 1 then
+		return
+	end
+
+	zoneTimeElapsed = 0
+
+	local timeSuffix = GetServerTimeSuffix()
+	if timeSuffix ~= lastZoneTimeSuffix then
+		UpdateZoneHeaderText()
+	end
 end)
