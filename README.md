@@ -8,6 +8,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Reports `GetMinimapShape()` as `SQUARE` for addon compatibility
 - Reapplies the square mask on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
+- Keeps the zone name while removing the default floating header frame chrome
 - Saved minimap size with a default of **400x400**
 
 ## Compatibility

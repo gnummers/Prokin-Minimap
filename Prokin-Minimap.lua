@@ -138,6 +138,52 @@ local function ApplyZoneLayout()
 	adjustingZoneLayout = false
 end
 
+local function StripZoneHeaderChrome()
+	local button = _G.MinimapZoneTextButton
+	if not button then
+		return
+	end
+
+	if button.SetNormalTexture then
+		button:SetNormalTexture(nil)
+	end
+
+	if button.SetPushedTexture then
+		button:SetPushedTexture(nil)
+	end
+
+	if button.SetHighlightTexture then
+		button:SetHighlightTexture(nil)
+	end
+
+	if button.SetDisabledTexture then
+		button:SetDisabledTexture(nil)
+	end
+
+	local zoneText = _G.MinimapZoneText
+	for _, region in ipairs({ button:GetRegions() }) do
+		if region and region ~= zoneText and region.GetObjectType and region:GetObjectType() == 'Texture' then
+			region:SetTexture(nil)
+			region:Hide()
+		end
+	end
+
+	for _, child in ipairs({ button:GetChildren() }) do
+		if child and child.Hide then
+			child:Hide()
+		end
+	end
+
+	if button.EnableMouse then
+		button:EnableMouse(false)
+	end
+
+	if zoneText then
+		zoneText:ClearAllPoints()
+		zoneText:SetPoint('CENTER', button, 'CENTER', 0, 0)
+	end
+end
+
 local function HandleMinimapMouseWheel(_, delta)
 	local zoomIn = Minimap and (Minimap.ZoomIn or _G.MinimapZoomIn)
 	local zoomOut = Minimap and (Minimap.ZoomOut or _G.MinimapZoomOut)
@@ -193,6 +239,7 @@ local function RefreshMinimap()
 	ApplySquareMinimap()
 	EnsureMinimapBorder()
 	ApplyZoneLayout()
+	StripZoneHeaderChrome()
 	ApplyHybridMinimap()
 end
 
@@ -280,6 +327,9 @@ local function InstallHooks()
 
 	if _G.MinimapZoneTextButton then
 		hooksecurefunc(_G.MinimapZoneTextButton, 'SetPoint', ApplyZoneLayout)
+		if _G.MinimapZoneTextButton.HookScript then
+			_G.MinimapZoneTextButton:HookScript('OnShow', StripZoneHeaderChrome)
+		end
 	end
 
 	hooksInstalled = true
