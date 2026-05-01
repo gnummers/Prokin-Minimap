@@ -15,6 +15,9 @@ local HIDDEN_TEXTURES = {
 local hooksInstalled
 local adjustingZoneLayout
 local minimapBorder
+local zoneHeaderFrame
+local zoneHeaderText
+local eventFrame
 
 local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format('|cff33ff99%s|r: %s', ADDON_NAME, message))
@@ -116,71 +119,121 @@ local function EnsureMinimapBorder()
 	minimapBorder.right:SetWidth(BORDER_SIZE)
 end
 
+local function EnsureCustomZoneHeader()
+	if zoneHeaderFrame or not Minimap then
+		return
+	end
+
+	zoneHeaderFrame = CreateFrame('Frame', nil, Minimap)
+	zoneHeaderFrame:SetFrameStrata('MEDIUM')
+	zoneHeaderFrame:SetFrameLevel(Minimap:GetFrameLevel() + 20)
+
+	zoneHeaderText = zoneHeaderFrame:CreateFontString(nil, 'OVERLAY')
+	zoneHeaderText:SetPoint('CENTER', zoneHeaderFrame, 'CENTER', 0, 0)
+	zoneHeaderText:SetJustifyH('CENTER')
+	zoneHeaderText:SetJustifyV('MIDDLE')
+
+	local defaultText = _G.MinimapZoneText
+	if defaultText and defaultText.GetFont then
+		local font, size, flags = defaultText:GetFont()
+		if font then
+			zoneHeaderText:SetFont(font, size, flags)
+		end
+	end
+
+	if not zoneHeaderText:GetFont() then
+		zoneHeaderText:SetFontObject(GameFontNormalSmall)
+	end
+end
+
+local function UpdateZoneHeaderText()
+	EnsureCustomZoneHeader()
+	if not zoneHeaderFrame or not zoneHeaderText then
+		return
+	end
+
+	local text = GetMinimapZoneText and GetMinimapZoneText() or ''
+	zoneHeaderText:SetText(text or '')
+
+	local textHeight = math.ceil(zoneHeaderText:GetStringHeight() or 0)
+	if textHeight < 1 then
+		textHeight = 12
+	end
+
+	zoneHeaderFrame:SetHeight(textHeight)
+	zoneHeaderFrame:SetShown((text or '') ~= '')
+end
+
 local function ApplyZoneLayout()
-	local button = _G.MinimapZoneTextButton
 	local cluster = _G.MinimapCluster
 	if not Minimap or not cluster or adjustingZoneLayout then
 		return
 	end
 
 	adjustingZoneLayout = true
+	UpdateZoneHeaderText()
 
-	local headerHeight = button and button:GetHeight() or 0
+	local headerHeight = zoneHeaderFrame and zoneHeaderFrame:IsShown() and zoneHeaderFrame:GetHeight() or 0
 	Minimap:ClearAllPoints()
 	Minimap:SetPoint('TOPRIGHT', cluster, 'TOPRIGHT', 0, -(headerHeight + HEADER_SPACING))
 
-	if button then
-		button:ClearAllPoints()
-		button:SetPoint('BOTTOMLEFT', Minimap, 'TOPLEFT', 0, HEADER_SPACING)
-		button:SetPoint('BOTTOMRIGHT', Minimap, 'TOPRIGHT', 0, HEADER_SPACING)
+	if zoneHeaderFrame then
+		zoneHeaderFrame:ClearAllPoints()
+		zoneHeaderFrame:SetPoint('BOTTOMLEFT', Minimap, 'TOPLEFT', 0, HEADER_SPACING)
+		zoneHeaderFrame:SetPoint('BOTTOMRIGHT', Minimap, 'TOPRIGHT', 0, HEADER_SPACING)
 	end
 
 	adjustingZoneLayout = false
 end
 
-local function StripZoneHeaderChrome()
-	local button = _G.MinimapZoneTextButton
-	if not button then
+local function HideFrameChrome(frame)
+	if not frame then
 		return
 	end
 
-	if button.SetNormalTexture then
-		button:SetNormalTexture(nil)
+	if frame.SetNormalTexture then
+		frame:SetNormalTexture(nil)
 	end
 
-	if button.SetPushedTexture then
-		button:SetPushedTexture(nil)
+	if frame.SetPushedTexture then
+		frame:SetPushedTexture(nil)
 	end
 
-	if button.SetHighlightTexture then
-		button:SetHighlightTexture(nil)
+	if frame.SetHighlightTexture then
+		frame:SetHighlightTexture(nil)
 	end
 
-	if button.SetDisabledTexture then
-		button:SetDisabledTexture(nil)
+	if frame.SetDisabledTexture then
+		frame:SetDisabledTexture(nil)
 	end
 
-	local zoneText = _G.MinimapZoneText
-	for _, region in ipairs({ button:GetRegions() }) do
-		if region and region ~= zoneText and region.GetObjectType and region:GetObjectType() == 'Texture' then
+	for _, region in ipairs({ frame:GetRegions() }) do
+		if region and region.GetObjectType and region:GetObjectType() == 'Texture' then
 			region:SetTexture(nil)
 			region:Hide()
 		end
 	end
 
-	for _, child in ipairs({ button:GetChildren() }) do
+	for _, child in ipairs({ frame:GetChildren() }) do
 		if child and child.Hide then
 			child:Hide()
 		end
 	end
 
-	if button.EnableMouse then
-		button:EnableMouse(false)
+	if frame.EnableMouse then
+		frame:EnableMouse(false)
 	end
+end
 
-	if zoneText then
-		zoneText:ClearAllPoints()
-		zoneText:SetPoint('CENTER', button, 'CENTER', 0, 0)
+local function HideDefaultZoneHeader()
+	for _, frame in ipairs({
+		_G.MinimapZoneTextButton,
+		_G.MiniMapWorldMapButton
+	}) do
+		if frame then
+			HideFrameChrome(frame)
+			frame:Hide()
+		end
 	end
 end
 
@@ -239,7 +292,7 @@ local function RefreshMinimap()
 	ApplySquareMinimap()
 	EnsureMinimapBorder()
 	ApplyZoneLayout()
-	StripZoneHeaderChrome()
+	HideDefaultZoneHeader()
 	ApplyHybridMinimap()
 end
 
@@ -326,20 +379,32 @@ local function InstallHooks()
 	end
 
 	if _G.MinimapZoneTextButton then
-		hooksecurefunc(_G.MinimapZoneTextButton, 'SetPoint', ApplyZoneLayout)
+		if _G.MinimapZoneTextButton.SetPoint then
+			hooksecurefunc(_G.MinimapZoneTextButton, 'SetPoint', ApplyZoneLayout)
+		end
 		if _G.MinimapZoneTextButton.HookScript then
-			_G.MinimapZoneTextButton:HookScript('OnShow', StripZoneHeaderChrome)
+			_G.MinimapZoneTextButton:HookScript('OnShow', HideDefaultZoneHeader)
 		end
 	end
 
-	hooksInstalled = true
+	if _G.MiniMapWorldMapButton and _G.MiniMapWorldMapButton.HookScript then
+		_G.MiniMapWorldMapButton:HookScript('OnShow', HideDefaultZoneHeader)
+	end
+
+	for _, event in ipairs({
+		'ZONE_CHANGED',
+		'ZONE_CHANGED_INDOORS',
+		'ZONE_CHANGED_NEW_AREA'
+	}) do
+		eventFrame:RegisterEvent(event)
+	end
 end
 
-local frame = CreateFrame('Frame')
-frame:RegisterEvent('ADDON_LOADED')
-frame:RegisterEvent('PLAYER_LOGIN')
-frame:RegisterEvent('PLAYER_ENTERING_WORLD')
-frame:SetScript('OnEvent', function(_, event, arg1)
+eventFrame = CreateFrame('Frame')
+eventFrame:RegisterEvent('ADDON_LOADED')
+eventFrame:RegisterEvent('PLAYER_LOGIN')
+eventFrame:RegisterEvent('PLAYER_ENTERING_WORLD')
+eventFrame:SetScript('OnEvent', function(_, event, arg1)
 	if event == 'ADDON_LOADED' then
 		if arg1 == ADDON_NAME then
 			GetDatabase()
