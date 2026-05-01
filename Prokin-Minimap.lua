@@ -17,6 +17,7 @@ local adjustingZoneLayout
 local minimapBorder
 local zoneHeaderFrame
 local zoneHeaderText
+local hiddenZoneHeaderParent
 local eventFrame
 
 local function Print(message)
@@ -146,6 +147,15 @@ local function EnsureCustomZoneHeader()
 	end
 end
 
+local function EnsureHiddenZoneHeaderParent()
+	if hiddenZoneHeaderParent then
+		return
+	end
+
+	hiddenZoneHeaderParent = CreateFrame('Frame')
+	hiddenZoneHeaderParent:Hide()
+end
+
 local function UpdateZoneHeaderText()
 	EnsureCustomZoneHeader()
 	if not zoneHeaderFrame or not zoneHeaderText then
@@ -226,12 +236,24 @@ local function HideFrameChrome(frame)
 end
 
 local function HideDefaultZoneHeader()
+	EnsureHiddenZoneHeaderParent()
+
 	for _, frame in ipairs({
 		_G.MinimapZoneTextButton,
-		_G.MiniMapWorldMapButton
+		_G.MiniMapWorldMapButton,
+		_G.MinimapZoneText
 	}) do
 		if frame then
 			HideFrameChrome(frame)
+			if frame.ClearAllPoints then
+				frame:ClearAllPoints()
+			end
+			if frame.SetParent then
+				frame:SetParent(hiddenZoneHeaderParent)
+			end
+			if frame.SetAlpha then
+				frame:SetAlpha(0)
+			end
 			frame:Hide()
 		end
 	end
