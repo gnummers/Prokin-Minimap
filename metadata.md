@@ -52,8 +52,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.7.zip`
-- **Display Name:** Prokin-Minimap v1.0.7
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.8.zip`
+- **Display Name:** Prokin-Minimap v1.0.8
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -66,6 +66,7 @@ Saved variable:
 - Added mousewheel minimap zoom support
 - Switched to a pfUI-style custom zone label and fixed the suppression helper so Blizzard header widgets and duplicate zone text are disabled reliably
 - Added a server-time suffix to the custom zone label using `[HH:MM AM/PM]`
+- Fixed TBC Anniversary compatibility by avoiding `Set*Texture(nil)` calls on Blizzard minimap header buttons
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support

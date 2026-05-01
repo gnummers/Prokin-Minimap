@@ -236,20 +236,36 @@ local function HideFrameChrome(frame)
 		return
 	end
 
-	if frame.SetNormalTexture then
-		frame:SetNormalTexture(nil)
+	if frame.GetNormalTexture then
+		local texture = frame:GetNormalTexture()
+		if texture then
+			texture:SetTexture(nil)
+			texture:Hide()
+		end
 	end
 
-	if frame.SetPushedTexture then
-		frame:SetPushedTexture(nil)
+	if frame.GetPushedTexture then
+		local texture = frame:GetPushedTexture()
+		if texture then
+			texture:SetTexture(nil)
+			texture:Hide()
+		end
 	end
 
-	if frame.SetHighlightTexture then
-		frame:SetHighlightTexture(nil)
+	if frame.GetHighlightTexture then
+		local texture = frame:GetHighlightTexture()
+		if texture then
+			texture:SetTexture(nil)
+			texture:Hide()
+		end
 	end
 
-	if frame.SetDisabledTexture then
-		frame:SetDisabledTexture(nil)
+	if frame.GetDisabledTexture then
+		local texture = frame:GetDisabledTexture()
+		if texture then
+			texture:SetTexture(nil)
+			texture:Hide()
+		end
 	end
 
 	if frame.GetRegions then
