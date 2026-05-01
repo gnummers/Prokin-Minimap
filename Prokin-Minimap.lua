@@ -138,6 +138,21 @@ local function ApplyZoneLayout()
 	adjustingZoneLayout = false
 end
 
+local function HandleMinimapMouseWheel(_, delta)
+	local zoomIn = Minimap and (Minimap.ZoomIn or _G.MinimapZoomIn)
+	local zoomOut = Minimap and (Minimap.ZoomOut or _G.MinimapZoomOut)
+
+	if delta > 0 then
+		if zoomIn then
+			zoomIn:Click()
+		end
+	elseif delta < 0 then
+		if zoomOut then
+			zoomOut:Click()
+		end
+	end
+end
+
 local function ApplyHybridMinimap()
 	local hybridMinimap = _G.HybridMinimap
 	if not hybridMinimap then
@@ -145,8 +160,18 @@ local function ApplyHybridMinimap()
 	end
 
 	local mapCanvas = hybridMinimap.MapCanvas
-	if mapCanvas and mapCanvas.SetMaskTexture then
-		mapCanvas:SetMaskTexture()
+	if mapCanvas then
+		if mapCanvas.EnableMouseWheel then
+			mapCanvas:EnableMouseWheel(true)
+		end
+
+		if mapCanvas.SetMaskTexture then
+			mapCanvas:SetMaskTexture()
+		end
+
+		if mapCanvas.SetScript then
+			mapCanvas:SetScript('OnMouseWheel', HandleMinimapMouseWheel)
+		end
 	end
 
 	local circleMask = hybridMinimap.CircleMask
@@ -235,6 +260,14 @@ SlashCmdList.PROKINMINIMAP = HandleSlashCommand
 local function InstallHooks()
 	if hooksInstalled then
 		return
+	end
+
+	if Minimap then
+		if Minimap.EnableMouseWheel then
+			Minimap:EnableMouseWheel(true)
+		end
+
+		Minimap:SetScript('OnMouseWheel', HandleMinimapMouseWheel)
 	end
 
 	if Minimap and Minimap.HookScript then
