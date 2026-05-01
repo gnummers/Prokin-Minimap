@@ -219,16 +219,20 @@ local function HideFrameChrome(frame)
 		frame:SetDisabledTexture(nil)
 	end
 
-	for _, region in ipairs({ frame:GetRegions() }) do
-		if region and region.GetObjectType and region:GetObjectType() == 'Texture' then
-			region:SetTexture(nil)
-			region:Hide()
+	if frame.GetRegions then
+		for _, region in ipairs({ frame:GetRegions() }) do
+			if region and region.GetObjectType and region:GetObjectType() == 'Texture' then
+				region:SetTexture(nil)
+				region:Hide()
+			end
 		end
 	end
 
-	for _, child in ipairs({ frame:GetChildren() }) do
-		if child and child.Hide then
-			child:Hide()
+	if frame.GetChildren then
+		for _, child in ipairs({ frame:GetChildren() }) do
+			if child and child.Hide then
+				child:Hide()
+			end
 		end
 	end
 
@@ -242,6 +246,15 @@ local function SuppressFrame(frame, clearText)
 		return
 	end
 
+	if frame.__ProkinSuppressed then
+		if clearText and frame.SetText then
+			frame:SetText('')
+		end
+
+		return
+	end
+
+	frame.__ProkinSuppressed = true
 	HideFrameChrome(frame)
 
 	if frame.UnregisterAllEvents then
@@ -265,7 +278,7 @@ local function SuppressFrame(frame, clearText)
 		frame.SetText = Noop
 	end
 
-	if frame.SetScript then
+	if frame.SetScript and frame.Hide then
 		frame:SetScript('OnShow', frame.Hide)
 	end
 
