@@ -1,5 +1,6 @@
 local ADDON_NAME = ...
 local HYBRID_MINIMAP_ADDON = 'Blizzard_HybridMinimap'
+local AUTOMARKASSIST_ADDON = 'AutoMarkAssist'
 local DEFAULT_SIZE = 400
 local MIN_SIZE = 100
 local MAX_SIZE = 800
@@ -21,6 +22,7 @@ local hiddenZoneHeaderParent
 local eventFrame
 local zoneTimeElapsed = 0
 local lastZoneTimeSuffix
+local autoMarkAssistHookInstalled
 
 local function Noop() end
 
@@ -410,6 +412,52 @@ local function GetSquareMinimapShape()
 	return 'SQUARE'
 end
 
+local function PositionButtonOnSquareEdge(button, angle)
+	if not Minimap or not button then
+		return
+	end
+
+	angle = tonumber(angle)
+	if not angle then
+		return
+	end
+
+	local radians = math.rad(angle)
+	local xUnit = math.cos(radians)
+	local yUnit = math.sin(radians)
+	local divisor = math.max(math.abs(xUnit), math.abs(yUnit), 0.0001)
+	local halfWidth = (Minimap:GetWidth() or DEFAULT_SIZE) * 0.5
+	local halfHeight = (Minimap:GetHeight() or DEFAULT_SIZE) * 0.5
+
+	button:ClearAllPoints()
+	button:SetPoint('CENTER', Minimap, 'CENTER', (xUnit / divisor) * halfWidth, (yUnit / divisor) * halfHeight)
+end
+
+local function ApplyAutoMarkAssistCompatibility()
+	local button = _G.AMA_MinimapButton
+	local db = _G.AutoMarkAssistDB
+	if not button or not db then
+		return
+	end
+
+	PositionButtonOnSquareEdge(button, db.minimapAngle or 225)
+end
+
+local function InstallAutoMarkAssistCompatibility()
+	if autoMarkAssistHookInstalled then
+		return
+	end
+
+	local autoMarkAssist = _G.AutoMarkAssist
+	if not autoMarkAssist or type(autoMarkAssist.UpdateMinimapPosition) ~= 'function' then
+		return
+	end
+
+	hooksecurefunc(autoMarkAssist, 'UpdateMinimapPosition', ApplyAutoMarkAssistCompatibility)
+	autoMarkAssistHookInstalled = true
+	ApplyAutoMarkAssistCompatibility()
+end
+
 local function RefreshMinimap()
 	_G.GetMinimapShape = GetSquareMinimapShape
 	ApplySquareMinimap()
@@ -417,6 +465,8 @@ local function RefreshMinimap()
 	ApplyZoneLayout()
 	HideDefaultZoneHeader()
 	ApplyHybridMinimap()
+	InstallAutoMarkAssistCompatibility()
+	ApplyAutoMarkAssistCompatibility()
 end
 
 local function SetMinimapSize(size)
@@ -528,6 +578,8 @@ local function InstallHooks()
 		hooksecurefunc('SetLookingForGroupUIAvailable', HideDefaultZoneHeader)
 	end
 
+	InstallAutoMarkAssistCompatibility()
+
 	for _, event in ipairs({
 		'ZONE_CHANGED',
 		'ZONE_CHANGED_INDOORS',
@@ -548,6 +600,8 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 			InstallHooks()
 		elseif arg1 == HYBRID_MINIMAP_ADDON then
 			ApplyHybridMinimap()
+		elseif arg1 == AUTOMARKASSIST_ADDON then
+			InstallAutoMarkAssistCompatibility()
 		else
 			return
 		end

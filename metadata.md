@@ -14,7 +14,7 @@
 
 ## Summary
 
-Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, custom icon support, polished header handling, and a server-time zone label.
+Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, custom icon support, polished header handling, a server-time zone label, and compatibility shims for stray minimap buttons.
 
 ## Description
 
@@ -27,6 +27,7 @@ Features:
 - Reapplies the square minimap on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
+- Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
 - Persistent square resizing with a default size of `400x400`
 - Header spacing that keeps the zone text visible when the minimap is enlarged
 - Custom 1 pixel black border around the minimap
@@ -52,8 +53,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.8.zip`
-- **Display Name:** Prokin-Minimap v1.0.8
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.9.zip`
+- **Display Name:** Prokin-Minimap v1.0.9
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -67,6 +68,7 @@ Saved variable:
 - Switched to a pfUI-style custom zone label and fixed the suppression helper so Blizzard header widgets and duplicate zone text are disabled reliably
 - Added a server-time suffix to the custom zone label using `[HH:MM AM/PM]`
 - Fixed TBC Anniversary compatibility by avoiding `Set*Texture(nil)` calls on Blizzard minimap header buttons
+- Added AutoMarkAssist minimap button compatibility so its icon is clamped to the square minimap edge
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support
