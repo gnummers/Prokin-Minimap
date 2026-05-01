@@ -26,7 +26,7 @@ Features:
 - Reports `GetMinimapShape()` as `SQUARE` for addon compatibility
 - Reapplies the square minimap on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
-- Replaces the default Blizzard zone header with a custom zone label so the floating bar, red X, and duplicate zone text do not appear
+- Replaces the default Blizzard zone header with a custom zone label and suppresses both legacy and cluster-owned Blizzard header widgets so the floating bar, red X, and duplicate zone text do not appear
 - Persistent square resizing with a default size of `400x400`
 - Header spacing that keeps the zone text visible when the minimap is enlarged
 - Custom 1 pixel black border around the minimap
@@ -52,8 +52,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.4.zip`
-- **Display Name:** Prokin-Minimap v1.0.4
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.5.zip`
+- **Display Name:** Prokin-Minimap v1.0.5
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -64,7 +64,7 @@ Saved variable:
 - Added persistent minimap resizing with a default size of 400x400
 - Added refresh hooks for world entry, minimap show, and hybrid minimap loading
 - Added mousewheel minimap zoom support
-- Replaced the default Blizzard zone header with a custom zone label and fully disabled the original header widgets to prevent the bar, red X, and duplicate zone text
+- Replaced the default Blizzard zone header with a custom zone label and suppressed both legacy and cluster-owned Blizzard header widgets to prevent the bar, red X, and duplicate zone text
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support

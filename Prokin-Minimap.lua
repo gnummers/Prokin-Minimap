@@ -20,6 +20,8 @@ local zoneHeaderText
 local hiddenZoneHeaderParent
 local eventFrame
 
+local function Noop() end
+
 local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format('|cff33ff99%s|r: %s', ADDON_NAME, message))
 end
@@ -235,28 +237,65 @@ local function HideFrameChrome(frame)
 	end
 end
 
+local function SuppressFrame(frame, clearText)
+	if not frame then
+		return
+	end
+
+	HideFrameChrome(frame)
+
+	if frame.UnregisterAllEvents then
+		frame:UnregisterAllEvents()
+	end
+
+	if frame.ClearAllPoints then
+		frame:ClearAllPoints()
+	end
+
+	if frame.SetParent then
+		frame:SetParent(hiddenZoneHeaderParent)
+	end
+
+	if frame.SetAlpha then
+		frame:SetAlpha(0)
+	end
+
+	if clearText and frame.SetText then
+		frame:SetText('')
+		frame.SetText = Noop
+	end
+
+	if frame.SetScript then
+		frame:SetScript('OnShow', frame.Hide)
+	end
+
+	if frame.Hide then
+		frame:Hide()
+	end
+
+	if frame.Show then
+		frame.Show = Noop
+	end
+
+	if frame.SetShown then
+		frame.SetShown = Noop
+	end
+end
+
 local function HideDefaultZoneHeader()
 	EnsureHiddenZoneHeaderParent()
 
-	for _, frame in ipairs({
-		_G.MinimapZoneTextButton,
-		_G.MiniMapWorldMapButton,
-		_G.MinimapZoneText
-	}) do
-		if frame then
-			HideFrameChrome(frame)
-			if frame.ClearAllPoints then
-				frame:ClearAllPoints()
-			end
-			if frame.SetParent then
-				frame:SetParent(hiddenZoneHeaderParent)
-			end
-			if frame.SetAlpha then
-				frame:SetAlpha(0)
-			end
-			frame:Hide()
-		end
+	local cluster = _G.MinimapCluster
+
+	if cluster then
+		SuppressFrame(cluster.ZoneTextButton)
+		SuppressFrame(cluster.BorderTop)
 	end
+
+	SuppressFrame(_G.MiniMapWorldMapButton)
+	SuppressFrame(_G.MiniMapWorldMapButtonCloseButton)
+	SuppressFrame(_G.MinimapZoneTextButton)
+	SuppressFrame(_G.MinimapZoneText, true)
 end
 
 local function HandleMinimapMouseWheel(_, delta)
@@ -411,6 +450,20 @@ local function InstallHooks()
 
 	if _G.MiniMapWorldMapButton and _G.MiniMapWorldMapButton.HookScript then
 		_G.MiniMapWorldMapButton:HookScript('OnShow', HideDefaultZoneHeader)
+	end
+
+	if _G.MinimapCluster then
+		if _G.MinimapCluster.ZoneTextButton and _G.MinimapCluster.ZoneTextButton.HookScript then
+			_G.MinimapCluster.ZoneTextButton:HookScript('OnShow', HideDefaultZoneHeader)
+		end
+
+		if _G.MinimapCluster.BorderTop and _G.MinimapCluster.BorderTop.HookScript then
+			_G.MinimapCluster.BorderTop:HookScript('OnShow', HideDefaultZoneHeader)
+		end
+	end
+
+	if type(SetLookingForGroupUIAvailable) == 'function' then
+		hooksecurefunc('SetLookingForGroupUIAvailable', HideDefaultZoneHeader)
 	end
 
 	for _, event in ipairs({
