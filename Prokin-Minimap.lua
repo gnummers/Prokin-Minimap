@@ -7,9 +7,9 @@ local DEFAULT_SIZE = 400
 local MIN_SIZE = 100
 local MAX_SIZE = 800
 local DEFAULT_STEP = 25
-local HEADER_SPACING = 4
+local ZONE_HEADER_SPACING = 4
 local BORDER_SIZE = 1
-local WIDGET_EDGE_PADDING = 4
+local WIDGET_EDGE_PADDING = 0
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
@@ -267,12 +267,12 @@ local function ApplyZoneLayout()
 
 	local headerHeight = zoneHeaderFrame and zoneHeaderFrame:IsShown() and zoneHeaderFrame:GetHeight() or 0
 	Minimap:ClearAllPoints()
-	Minimap:SetPoint('TOPRIGHT', cluster, 'TOPRIGHT', 0, -(headerHeight + HEADER_SPACING))
+	Minimap:SetPoint('TOPRIGHT', cluster, 'TOPRIGHT', 0, -(headerHeight + ZONE_HEADER_SPACING))
 
 	if zoneHeaderFrame then
 		zoneHeaderFrame:ClearAllPoints()
-		zoneHeaderFrame:SetPoint('BOTTOMLEFT', Minimap, 'TOPLEFT', 0, HEADER_SPACING)
-		zoneHeaderFrame:SetPoint('BOTTOMRIGHT', Minimap, 'TOPRIGHT', 0, HEADER_SPACING)
+		zoneHeaderFrame:SetPoint('BOTTOMLEFT', Minimap, 'TOPLEFT', 0, ZONE_HEADER_SPACING)
+		zoneHeaderFrame:SetPoint('BOTTOMRIGHT', Minimap, 'TOPRIGHT', 0, ZONE_HEADER_SPACING)
 	end
 
 	adjustingZoneLayout = false
@@ -472,11 +472,47 @@ end
 
 local function GetTrackingButton()
 	local cluster = _G.MinimapCluster
-	if cluster and cluster.Tracking and cluster.Tracking.Button then
-		return cluster.Tracking.Button
+	local candidates = {}
+	local seen = {}
+
+	local function AddCandidate(frame)
+		if frame and not seen[frame] then
+			seen[frame] = true
+			table.insert(candidates, frame)
+		end
 	end
 
-	return _G.MiniMapTrackingButton or _G.MinimapToggleButton or _G.MiniMapTracking
+	if cluster then
+		if cluster.Tracking and cluster.Tracking.Button then
+			AddCandidate(cluster.Tracking.Button)
+		end
+
+		AddCandidate(cluster.Tracking)
+		AddCandidate(cluster.TrackingFrame)
+	end
+
+	AddCandidate(_G.MiniMapTracking)
+	AddCandidate(_G.MiniMapTrackingButton)
+	AddCandidate(_G.MinimapToggleButton)
+	AddCandidate(_G.MiniMapTrackingFrame)
+
+	for _, frame in ipairs(candidates) do
+		if frame.OpenMenu then
+			return frame
+		end
+
+		if frame.HasScript then
+			if frame:HasScript('OnMouseUp') and frame:GetScript('OnMouseUp') then
+				return frame
+			end
+
+			if frame:HasScript('OnClick') and frame:GetScript('OnClick') then
+				return frame
+			end
+		end
+	end
+
+	return candidates[1]
 end
 
 local function GetClockFrame()

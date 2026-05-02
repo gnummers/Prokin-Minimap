@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.16
+- Removed the visible pixel gap so the Blizzard minimap widgets sit flush against the square minimap border
+- Improved tracking button detection so the proxy targets the first Blizzard tracking control that actually exposes a menu handler on TBC Anniversary
+- Split the zone-header spacing from widget edge spacing so the zone name and server time label keep their 4 pixel top offset independently
+
 ## v1.0.15
 - Fixed the draggable widget wrapper so it only hooks scripts a Blizzard frame actually supports on TBC Anniversary
 - Resolved the `GameTimeFrame:GetScript()` and `MiniMapMailFrame:GetScript()` Lua errors caused by drag suppression logic probing missing `OnClick` handlers

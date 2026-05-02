@@ -58,8 +58,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.15.zip`
-- **Display Name:** Prokin-Minimap v1.0.15
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.16.zip`
+- **Display Name:** Prokin-Minimap v1.0.16
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -84,6 +84,9 @@ Saved variable:
 - Fixed the tracking proxy button so clicking it opens Blizzard's tracking menu correctly
 - Added saved left-drag positioning for the visible Blizzard minimap widgets around the outside edge of the square minimap border
 - Fixed the draggable widget wrapper so it only hooks scripts Blizzard frames actually support on TBC Anniversary
+- Removed the visible pixel gap so the Blizzard minimap widgets sit flush against the square minimap border
+- Improved tracking button detection so the proxy targets the first Blizzard tracking control that actually exposes a menu handler on TBC Anniversary
+- Split the zone-header spacing from widget edge spacing so the zone name and server time label keep their 4 pixel top offset independently
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support
