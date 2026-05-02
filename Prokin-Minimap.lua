@@ -10,6 +10,7 @@ local DEFAULT_STEP = 25
 local ZONE_HEADER_SPACING = 4
 local BORDER_SIZE = 1
 local WIDGET_EDGE_PADDING = 0
+local WIDGET_BORDER_OVERLAP = 3
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
@@ -591,8 +592,8 @@ local function GetWidgetAnchorOffsets(frame, edge, coord)
 	local frameHalfHeight = ((frame.GetHeight and frame:GetHeight()) or 32) * 0.5
 	local horizontalRange = math.max(halfWidth - frameHalfWidth, 0)
 	local verticalRange = math.max(halfHeight - frameHalfHeight, 0)
-	local outsideX = halfWidth + frameHalfWidth + WIDGET_EDGE_PADDING
-	local outsideY = halfHeight + frameHalfHeight + WIDGET_EDGE_PADDING
+	local outsideX = halfWidth + frameHalfWidth + WIDGET_EDGE_PADDING - WIDGET_BORDER_OVERLAP
+	local outsideY = halfHeight + frameHalfHeight + WIDGET_EDGE_PADDING - WIDGET_BORDER_OVERLAP
 
 	coord = ClampWidgetCoord(coord)
 
@@ -784,8 +785,11 @@ local function CreateProxyButton(name)
 	button:SetScript('OnMouseDown', function(self)
 		SetProxyButtonPressed(self, true)
 	end)
-	button:SetScript('OnMouseUp', function(self)
+	button:SetScript('OnMouseUp', function(self, mouseButton)
 		SetProxyButtonPressed(self, false)
+		if self.__ProkinMouseUpHandler then
+			self:__ProkinMouseUpHandler(mouseButton)
+		end
 	end)
 
 	return button
@@ -964,9 +968,11 @@ local function EnsureTrackingProxy()
 	end
 
 	trackingProxyButton = CreateProxyButton('ProkinMinimapTrackingProxy')
-	trackingProxyButton:SetScript('OnClick', function(self)
-		OpenTrackingMenu(self)
-	end)
+	trackingProxyButton.__ProkinMouseUpHandler = function(self, mouseButton)
+		if mouseButton == 'LeftButton' then
+			OpenTrackingMenu(self)
+		end
+	end
 	trackingProxyButton:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
 		GameTooltip:SetText(TRACKING, 1, 1, 1)
@@ -983,7 +989,7 @@ local function EnsureLFGProxy()
 	end
 
 	lfgProxyButton = CreateProxyButton('ProkinMinimapLFGProxy')
-	lfgProxyButton:SetScript('OnClick', function(self, button)
+	lfgProxyButton.__ProkinMouseUpHandler = function(self, button)
 		local lfg = GetLFGFrame()
 		local queueButton = _G.QueueStatusMinimapButton or _G.QueueStatusButton
 		if lfg and lfg.Click then
@@ -1009,7 +1015,7 @@ local function EnsureLFGProxy()
 		if type(ToggleFriendsFrame) == 'function' then
 			ToggleFriendsFrame(4)
 		end
-	end)
+	end
 	lfgProxyButton:SetScript('OnEnter', function(self)
 		local queueButton = _G.QueueStatusMinimapButton or _G.QueueStatusButton
 		if queueButton and type(QueueStatusMinimapButton_OnEnter) == 'function' then
@@ -1109,7 +1115,7 @@ local function EnsureBattlefieldProxy()
 	battlefieldProxyButton = CreateProxyButton('ProkinMinimapBattlefieldProxy')
 	battlefieldProxyButton.icon:SetTexture([[Interface\BattlefieldFrame\UI-Battlefield-Icon]])
 	battlefieldProxyButton.icon:SetTexCoord(0, 1, 0, 1)
-	battlefieldProxyButton:SetScript('OnClick', function(self, button)
+	battlefieldProxyButton.__ProkinMouseUpHandler = function(self, button)
 		local status = GetBattlefieldStatusInfo()
 		GameTooltip_Hide()
 
@@ -1124,7 +1130,7 @@ local function EnsureBattlefieldProxy()
 		elseif button == 'RightButton' and _G.MiniMapBattlefieldDropDown then
 			ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, self, 0, -5)
 		end
-	end)
+	end
 	battlefieldProxyButton:SetScript('OnEnter', function(self)
 		local _, tooltip = GetBattlefieldStatusInfo()
 		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.17
+- Switched the Blizzard proxy buttons to mouse-up activation so the tracking proxy follows the TBC control flow more closely
+- Added explicit widget border overlap to eliminate the remaining visible gap between the square minimap border and Blizzard widgets
+
 ## v1.0.16
 - Removed the visible pixel gap so the Blizzard minimap widgets sit flush against the square minimap border
 - Improved tracking button detection so the proxy targets the first Blizzard tracking control that actually exposes a menu handler on TBC Anniversary
