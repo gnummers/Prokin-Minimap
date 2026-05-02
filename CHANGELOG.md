@@ -1,0 +1,61 @@
+# Changelog
+
+## v1.0.10
+- Restored the Blizzard tracking, LFG/queue, clock, mail, and PvP/battleground minimap widgets
+- Anchored those Blizzard widgets just outside the square minimap border
+- Added re-anchoring hooks so Blizzard repositioning is corrected automatically
+- Added `Blizzard_TimeManager` handling so the clock is re-anchored when it loads
+
+## v1.0.9
+- Added a Prokin-Minimap compatibility hook for AutoMarkAssist
+- Repositions the `AMA_MinimapButton` to the square minimap edge without modifying AutoMarkAssist
+- Updated README and release metadata for the new compatibility behavior
+
+## v1.0.8
+- Fixed the TBC Anniversary Lua error caused by calling Blizzard minimap button texture setters with `nil`
+- Changed header suppression to clear and hide existing texture objects directly instead of using `Set*Texture(nil)`
+- Updated release metadata for the compatibility fix
+
+## v1.0.7
+- Added a server-time suffix to the custom zone label
+- Time displays in 12-hour format as `[HH:MM AM/PM]`
+- Updated README and release metadata to document the new label format
+
+## v1.0.6
+- Fixed the minimap header suppression helper to handle Blizzard objects more safely at runtime
+- Improved reliability of hiding the floating header chrome, red X, and duplicate zone text
+- Updated README to reflect the pfUI-style custom zone label approach
+
+## v1.0.5
+- Expanded suppression of Blizzard minimap header elements
+- Added broader handling for legacy and cluster-owned header widgets
+- Improved attempts to stop the default zone header from reappearing
+
+## v1.0.4
+- Hardened the custom zone label replacement
+- Improved Blizzard header suppression behavior
+- Updated documentation for the custom zone label behavior
+
+## v1.0.3
+- Switched toward a custom minimap zone label approach
+- Reduced reliance on Blizzard's default zone header
+- Continued work on removing duplicate zone text and header chrome
+
+## v1.0.2
+- Added the first pass of minimap zone-header chrome cleanup
+- Began removing the floating frame and close button around the zone name
+
+## v1.0.1
+- Added mousewheel zoom support for the minimap
+- Matched the ElvUI-style zoom behavior for wheel up/down
+- Applied zoom handling to both the normal minimap and hybrid minimap
+
+## v1.0.0
+- Initial public release
+- Added ElvUI-style square minimap masking for TBC Anniversary
+- Added persistent minimap resizing with a default size of `400x400`
+- Added refresh hooks so the square minimap reapplies correctly
+- Added hybrid minimap compatibility
+- Added zone header spacing improvements
+- Added a custom 1px black minimap border
+- Added addon icon support and release packaging for GitHub/CurseForge
