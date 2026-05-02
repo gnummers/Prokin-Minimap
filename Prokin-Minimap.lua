@@ -16,6 +16,13 @@ local HIDDEN_TEXTURES = {
 	'MinimapBorderTop',
 	'MiniMapTrackingBorder'
 }
+local WIDGET_DEFAULT_POSITIONS = {
+	tracking = { edge = 'top', coord = -0.8 },
+	lfg = { edge = 'top', coord = 0.8 },
+	clock = { edge = 'bottom', coord = 0 },
+	mail = { edge = 'bottom', coord = -0.8 },
+	battlefield = { edge = 'bottom', coord = 0.8 }
+}
 local hooksInstalled
 local adjustingZoneLayout
 local minimapBorder
@@ -30,6 +37,7 @@ local adjustingWidgetLayout
 local trackingProxyButton
 local lfgProxyButton
 local battlefieldProxyButton
+local activeWidgetDrag
 local RefreshMinimap
 local ApplyBlizzardWidgetLayout
 local widgetMethods = setmetatable({}, { __mode = 'k' })
@@ -104,6 +112,9 @@ local function GetDatabase()
 	end
 
 	ProkinMinimapDB.size = NormalizeSize(ProkinMinimapDB.size) or DEFAULT_SIZE
+	if type(ProkinMinimapDB.widgetPositions) ~= 'table' then
+		ProkinMinimapDB.widgetPositions = {}
+	end
 	return ProkinMinimapDB
 end
 
@@ -459,6 +470,15 @@ local function GetTrackingFrame()
 	return _G.MiniMapTrackingButton or _G.MinimapToggleButton or _G.MiniMapTrackingFrame or _G.MiniMapTracking
 end
 
+local function GetTrackingButton()
+	local cluster = _G.MinimapCluster
+	if cluster and cluster.Tracking and cluster.Tracking.Button then
+		return cluster.Tracking.Button
+	end
+
+	return _G.MiniMapTrackingButton or _G.MinimapToggleButton or _G.MiniMapTracking
+end
+
 local function GetClockFrame()
 	return _G.TimeManagerClockButton or _G.GameTimeFrame
 end
@@ -477,13 +497,121 @@ local function GetBattlefieldFrame()
 	return _G.MiniMapBattlefieldFrame
 end
 
-local function AnchorProxy(frame, point, relativePoint, xOffset, yOffset)
+local function ClampWidgetCoord(coord)
+	coord = tonumber(coord) or 0
+
+	if coord < -1 then
+		return -1
+	elseif coord > 1 then
+		return 1
+	end
+
+	return coord
+end
+
+local function IsValidWidgetEdge(edge)
+	return edge == 'top' or edge == 'right' or edge == 'bottom' or edge == 'left'
+end
+
+local function GetWidgetPosition(widgetId)
+	local db = GetDatabase()
+	local defaultPosition = WIDGET_DEFAULT_POSITIONS[widgetId] or WIDGET_DEFAULT_POSITIONS.clock
+	local savedPosition = db.widgetPositions[widgetId]
+
+	if type(savedPosition) ~= 'table' then
+		savedPosition = {
+			edge = defaultPosition.edge,
+			coord = defaultPosition.coord
+		}
+		db.widgetPositions[widgetId] = savedPosition
+	end
+
+	if not IsValidWidgetEdge(savedPosition.edge) then
+		savedPosition.edge = defaultPosition.edge
+	end
+
+	savedPosition.coord = ClampWidgetCoord(savedPosition.coord or defaultPosition.coord)
+	return savedPosition.edge, savedPosition.coord
+end
+
+local function SetWidgetPosition(widgetId, edge, coord)
+	local db = GetDatabase()
+	local defaultPosition = WIDGET_DEFAULT_POSITIONS[widgetId] or WIDGET_DEFAULT_POSITIONS.clock
+
+	if not IsValidWidgetEdge(edge) then
+		edge = defaultPosition.edge
+	end
+
+	db.widgetPositions[widgetId] = {
+		edge = edge,
+		coord = ClampWidgetCoord(coord)
+	}
+end
+
+local function GetWidgetAnchorOffsets(frame, edge, coord)
+	local halfWidth = (Minimap:GetWidth() or DEFAULT_SIZE) * 0.5
+	local halfHeight = (Minimap:GetHeight() or DEFAULT_SIZE) * 0.5
+	local frameHalfWidth = ((frame.GetWidth and frame:GetWidth()) or 32) * 0.5
+	local frameHalfHeight = ((frame.GetHeight and frame:GetHeight()) or 32) * 0.5
+	local horizontalRange = math.max(halfWidth - frameHalfWidth, 0)
+	local verticalRange = math.max(halfHeight - frameHalfHeight, 0)
+	local outsideX = halfWidth + frameHalfWidth + WIDGET_EDGE_PADDING
+	local outsideY = halfHeight + frameHalfHeight + WIDGET_EDGE_PADDING
+
+	coord = ClampWidgetCoord(coord)
+
+	if edge == 'top' then
+		return coord * horizontalRange, outsideY
+	elseif edge == 'right' then
+		return outsideX, coord * verticalRange
+	elseif edge == 'bottom' then
+		return coord * horizontalRange, -outsideY
+	end
+
+	return -outsideX, coord * verticalRange
+end
+
+local function UpdateWidgetPositionFromCursor(frame, widgetId)
+	local scale = Minimap:GetEffectiveScale() or 1
+	local cursorX, cursorY = GetCursorPosition()
+	local centerX, centerY = Minimap:GetCenter()
+	if not centerX or not centerY then
+		return
+	end
+
+	local relativeX = (cursorX / scale) - centerX
+	local relativeY = (cursorY / scale) - centerY
+	local halfWidth = (Minimap:GetWidth() or DEFAULT_SIZE) * 0.5
+	local halfHeight = (Minimap:GetHeight() or DEFAULT_SIZE) * 0.5
+	local frameHalfWidth = ((frame.GetWidth and frame:GetWidth()) or 32) * 0.5
+	local frameHalfHeight = ((frame.GetHeight and frame:GetHeight()) or 32) * 0.5
+	local horizontalRange = math.max(halfWidth - frameHalfWidth, 1)
+	local verticalRange = math.max(halfHeight - frameHalfHeight, 1)
+	local horizontalRatio = math.abs(relativeX) / horizontalRange
+	local verticalRatio = math.abs(relativeY) / verticalRange
+	local edge
+	local coord
+
+	if verticalRatio >= horizontalRatio then
+		edge = relativeY >= 0 and 'top' or 'bottom'
+		coord = relativeX / horizontalRange
+	else
+		edge = relativeX >= 0 and 'right' or 'left'
+		coord = relativeY / verticalRange
+	end
+
+	SetWidgetPosition(widgetId, edge, coord)
+end
+
+local function AnchorProxy(frame, widgetId)
 	if not frame or not Minimap then
 		return
 	end
 
+	local edge, coord = GetWidgetPosition(widgetId)
+	local xOffset, yOffset = GetWidgetAnchorOffsets(frame, edge, coord)
 	frame:ClearAllPoints()
-	frame:SetPoint(point, Minimap, relativePoint, xOffset, yOffset)
+	frame:SetPoint('CENTER', Minimap, 'CENTER', xOffset, yOffset)
 end
 
 local function PreserveWidgetMethods(frame)
@@ -538,6 +666,24 @@ local function AnchorWidget(frame, point, relativePoint, xOffset, yOffset)
 	CallWidgetMethod(frame, 'SetScale', 1)
 	CallWidgetMethod(frame, 'ClearAllPoints')
 	CallWidgetMethod(frame, 'SetPoint', point, Minimap, relativePoint, xOffset, yOffset)
+	adjustingWidgetLayout = false
+end
+
+local function AnchorStoredWidget(frame, widgetId)
+	if not frame or not Minimap or adjustingWidgetLayout then
+		return
+	end
+
+	PreserveWidgetMethods(frame)
+
+	local edge, coord = GetWidgetPosition(widgetId)
+	local xOffset, yOffset = GetWidgetAnchorOffsets(frame, edge, coord)
+
+	adjustingWidgetLayout = true
+	CallWidgetMethod(frame, 'SetParent', Minimap)
+	CallWidgetMethod(frame, 'SetScale', 1)
+	CallWidgetMethod(frame, 'ClearAllPoints')
+	CallWidgetMethod(frame, 'SetPoint', 'CENTER', Minimap, 'CENTER', xOffset, yOffset)
 	adjustingWidgetLayout = false
 end
 
@@ -609,6 +755,154 @@ local function CreateProxyButton(name)
 	return button
 end
 
+local function BeginWidgetDrag(frame, widgetId, useStoredAnchor)
+	if not frame or not widgetId then
+		return
+	end
+
+	activeWidgetDrag = {
+		frame = frame,
+		widgetId = widgetId,
+		useStoredAnchor = useStoredAnchor
+	}
+
+	GameTooltip_Hide()
+end
+
+local function StopWidgetDrag(frame)
+	if not activeWidgetDrag or activeWidgetDrag.frame ~= frame then
+		return false
+	end
+
+	UpdateWidgetPositionFromCursor(frame, activeWidgetDrag.widgetId)
+
+	if activeWidgetDrag.useStoredAnchor then
+		AnchorStoredWidget(frame, activeWidgetDrag.widgetId)
+	else
+		AnchorProxy(frame, activeWidgetDrag.widgetId)
+	end
+
+	if frame.overlay then
+		SetProxyButtonPressed(frame, false)
+	end
+
+	frame.__ProkinSuppressClick = true
+	activeWidgetDrag = nil
+	return true
+end
+
+local function UpdateWidgetDrag()
+	if not activeWidgetDrag then
+		return
+	end
+
+	local frame = activeWidgetDrag.frame
+	if not frame then
+		activeWidgetDrag = nil
+		return
+	end
+
+	UpdateWidgetPositionFromCursor(frame, activeWidgetDrag.widgetId)
+
+	if activeWidgetDrag.useStoredAnchor then
+		AnchorStoredWidget(frame, activeWidgetDrag.widgetId)
+	else
+		AnchorProxy(frame, activeWidgetDrag.widgetId)
+	end
+end
+
+local function WrapWidgetClicks(frame)
+	if not frame or frame.__ProkinClickWrapped or not frame.GetScript or not frame.SetScript then
+		return
+	end
+
+	local originalOnClick = frame:GetScript('OnClick')
+	if originalOnClick then
+		frame:SetScript('OnClick', function(self, ...)
+			if self.__ProkinSuppressClick then
+				self.__ProkinSuppressClick = nil
+				return
+			end
+
+			return originalOnClick(self, ...)
+		end)
+	end
+
+	frame.__ProkinClickWrapped = true
+end
+
+local function MakeWidgetDraggable(frame, widgetId, useStoredAnchor)
+	if not frame or frame.__ProkinDragEnabled then
+		return
+	end
+
+	if frame.EnableMouse then
+		frame:EnableMouse(true)
+	end
+
+	if frame.RegisterForDrag then
+		frame:RegisterForDrag('LeftButton')
+	end
+
+	WrapWidgetClicks(frame)
+
+	if frame.HookScript then
+		frame:HookScript('OnDragStart', function(self)
+			BeginWidgetDrag(self, widgetId, useStoredAnchor)
+		end)
+		frame:HookScript('OnDragStop', function(self)
+			StopWidgetDrag(self)
+		end)
+	end
+
+	frame.__ProkinDragEnabled = true
+end
+
+local function ReanchorTrackingMenu(anchor)
+	local dropDown = _G.DropDownList1
+	if not anchor or not dropDown or not dropDown.IsShown or not dropDown:IsShown() then
+		return
+	end
+
+	dropDown:ClearAllPoints()
+	dropDown:SetPoint('TOPRIGHT', anchor, 'BOTTOMRIGHT', 0, -2)
+end
+
+local function OpenTrackingMenu(anchor)
+	local button = GetTrackingButton()
+	if not button then
+		return
+	end
+
+	if button.OpenMenu then
+		button:OpenMenu()
+		if button.menu and button.menu.ClearAllPoints and button.menu.SetPoint then
+			button.menu:ClearAllPoints()
+			button.menu:SetPoint('TOPRIGHT', anchor, 'BOTTOMRIGHT', 0, -2)
+		end
+		return
+	end
+
+	local onMouseUp = button.GetScript and button:GetScript('OnMouseUp')
+	if onMouseUp then
+		onMouseUp(button, 'LeftButton')
+		ReanchorTrackingMenu(anchor)
+		return
+	end
+
+	local onClick = button.GetScript and button:GetScript('OnClick')
+	if onClick then
+		onClick(button, 'LeftButton')
+		ReanchorTrackingMenu(anchor)
+		return
+	end
+
+	if _G.MiniMapTrackingDropDown then
+		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, anchor, 0, -5)
+		ReanchorTrackingMenu(anchor)
+	end
+end
+
 local function EnsureTrackingProxy()
 	if trackingProxyButton or not Minimap then
 		return
@@ -616,12 +910,7 @@ local function EnsureTrackingProxy()
 
 	trackingProxyButton = CreateProxyButton('ProkinMinimapTrackingProxy')
 	trackingProxyButton:SetScript('OnClick', function(self)
-		if not _G.MiniMapTrackingDropDown then
-			return
-		end
-
-		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, self, 0, -5)
-		PlaySound('igMainMenuOptionCheckBoxOn')
+		OpenTrackingMenu(self)
 	end)
 	trackingProxyButton:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
@@ -630,6 +919,7 @@ local function EnsureTrackingProxy()
 		GameTooltip:Show()
 	end)
 	trackingProxyButton:SetScript('OnLeave', GameTooltip_Hide)
+	MakeWidgetDraggable(trackingProxyButton, 'tracking')
 end
 
 local function EnsureLFGProxy()
@@ -685,6 +975,7 @@ local function EnsureLFGProxy()
 
 		GameTooltip_Hide(self)
 	end)
+	MakeWidgetDraggable(lfgProxyButton, 'lfg')
 end
 
 local function GetBattlefieldStatusInfo()
@@ -786,6 +1077,7 @@ local function EnsureBattlefieldProxy()
 		GameTooltip:Show()
 	end)
 	battlefieldProxyButton:SetScript('OnLeave', GameTooltip_Hide)
+	MakeWidgetDraggable(battlefieldProxyButton, 'battlefield')
 end
 
 local function UpdateTrackingProxy()
@@ -841,7 +1133,7 @@ ApplyBlizzardWidgetLayout = function()
 	EnsureTrackingProxy()
 	UpdateTrackingProxy()
 	if trackingProxyButton then
-		AnchorProxy(trackingProxyButton, 'TOPRIGHT', 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		AnchorProxy(trackingProxyButton, 'tracking')
 		trackingProxyButton:Show()
 	end
 
@@ -861,7 +1153,7 @@ ApplyBlizzardWidgetLayout = function()
 	EnsureLFGProxy()
 	UpdateLFGProxy()
 	if lfgProxyButton then
-		AnchorProxy(lfgProxyButton, 'TOPLEFT', 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		AnchorProxy(lfgProxyButton, 'lfg')
 		lfgProxyButton:Show()
 	end
 
@@ -875,9 +1167,10 @@ ApplyBlizzardWidgetLayout = function()
 
 	local clock = GetClockFrame()
 	if clock then
+		MakeWidgetDraggable(clock, 'clock', true)
 		PreserveWidgetMethods(clock)
 		HookWidgetPosition(clock)
-		AnchorWidget(clock, 'TOP', 'BOTTOM', 0, -WIDGET_EDGE_PADDING)
+		AnchorStoredWidget(clock, 'clock')
 		if clock.Show then
 			clock:Show()
 		end
@@ -885,9 +1178,10 @@ ApplyBlizzardWidgetLayout = function()
 
 	local mail = GetMailFrame()
 	if mail then
+		MakeWidgetDraggable(mail, 'mail', true)
 		PreserveWidgetMethods(mail)
 		HookWidgetPosition(mail)
-		AnchorWidget(mail, 'BOTTOMRIGHT', 'BOTTOMLEFT', -WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
+		AnchorStoredWidget(mail, 'mail')
 		if HasNewMail and HasNewMail() then
 			mail:Show()
 		elseif mail.Hide then
@@ -899,7 +1193,7 @@ ApplyBlizzardWidgetLayout = function()
 	local battlefieldStatus = GetBattlefieldStatusInfo()
 	EnsureBattlefieldProxy()
 	if battlefieldProxyButton then
-		AnchorProxy(battlefieldProxyButton, 'BOTTOMLEFT', 'BOTTOMRIGHT', WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
+		AnchorProxy(battlefieldProxyButton, 'battlefield')
 		if battlefieldStatus ~= nil then
 			battlefieldProxyButton:Show()
 		else
@@ -1126,6 +1420,8 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 	RefreshMinimap()
 end)
 eventFrame:SetScript('OnUpdate', function(_, elapsed)
+	UpdateWidgetDrag()
+
 	zoneTimeElapsed = zoneTimeElapsed + elapsed
 	if zoneTimeElapsed < 1 then
 		return

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.14
+- Fixed the tracking proxy button so clicking it opens Blizzard's tracking menu correctly
+- Added saved left-drag positioning for the visible Blizzard minimap widgets around the outside edge of the square minimap border
+- Preserves widget reordering across reloads and keeps the dragged widgets clamped to the square border
+
 ## v1.0.13
 - Moved the tracking and LFG proxy buttons off the minimap itself so MinimapButtonButton no longer collects them into its tray
 - Added a conditional PvP or battleground proxy button that only shows while Blizzard battlefield state is active
