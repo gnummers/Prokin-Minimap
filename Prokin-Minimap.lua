@@ -811,24 +811,43 @@ local function UpdateWidgetDrag()
 	end
 end
 
-local function WrapWidgetClicks(frame)
-	if not frame or frame.__ProkinClickWrapped or not frame.GetScript or not frame.SetScript then
+local function WrapWidgetScript(frame, scriptName)
+	if not frame or not scriptName or not frame.GetScript or not frame.SetScript then
 		return
 	end
 
-	local originalOnClick = frame:GetScript('OnClick')
-	if originalOnClick then
-		frame:SetScript('OnClick', function(self, ...)
+	if not frame.HasScript or not frame:HasScript(scriptName) then
+		return
+	end
+
+	if not frame.__ProkinWrappedScripts then
+		frame.__ProkinWrappedScripts = {}
+	elseif frame.__ProkinWrappedScripts[scriptName] then
+		return
+	end
+
+	local originalScript = frame:GetScript(scriptName)
+	if originalScript then
+		frame:SetScript(scriptName, function(self, ...)
 			if self.__ProkinSuppressClick then
 				self.__ProkinSuppressClick = nil
 				return
 			end
 
-			return originalOnClick(self, ...)
+			return originalScript(self, ...)
 		end)
 	end
 
-	frame.__ProkinClickWrapped = true
+	frame.__ProkinWrappedScripts[scriptName] = true
+end
+
+local function WrapWidgetClicks(frame)
+	if not frame then
+		return
+	end
+
+	WrapWidgetScript(frame, 'OnClick')
+	WrapWidgetScript(frame, 'OnMouseUp')
 end
 
 local function MakeWidgetDraggable(frame, widgetId, useStoredAnchor)

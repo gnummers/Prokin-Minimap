@@ -58,8 +58,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.14.zip`
-- **Display Name:** Prokin-Minimap v1.0.14
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.15.zip`
+- **Display Name:** Prokin-Minimap v1.0.15
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -83,6 +83,7 @@ Saved variable:
 - Tightened the mail icon handling so it only shows when `HasNewMail()` reports unread mail
 - Fixed the tracking proxy button so clicking it opens Blizzard's tracking menu correctly
 - Added saved left-drag positioning for the visible Blizzard minimap widgets around the outside edge of the square minimap border
+- Fixed the draggable widget wrapper so it only hooks scripts Blizzard frames actually support on TBC Anniversary
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.15
+- Fixed the draggable widget wrapper so it only hooks scripts a Blizzard frame actually supports on TBC Anniversary
+- Resolved the `GameTimeFrame:GetScript()` and `MiniMapMailFrame:GetScript()` Lua errors caused by drag suppression logic probing missing `OnClick` handlers
+
 ## v1.0.14
 - Fixed the tracking proxy button so clicking it opens Blizzard's tracking menu correctly
 - Added saved left-drag positioning for the visible Blizzard minimap widgets around the outside edge of the square minimap border
