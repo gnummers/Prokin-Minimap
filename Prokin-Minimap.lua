@@ -10,7 +10,13 @@ local DEFAULT_STEP = 25
 local ZONE_HEADER_SPACING = 4
 local BORDER_SIZE = 1
 local WIDGET_EDGE_PADDING = 0
-local WIDGET_BORDER_OVERLAP = 8
+local WIDGET_BORDER_OVERLAP = 12
+local PROXY_BUTTON_SIZE = 33
+local PROXY_BACKGROUND_SIZE = 30
+local PROXY_ICON_SIZE = 24
+local PROXY_BORDER_SIZE = 64
+local PROXY_ICON_OFFSET_X = 2
+local PROXY_ICON_OFFSET_Y = -2
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
@@ -39,6 +45,7 @@ local trackingProxyButton
 local lfgProxyButton
 local battlefieldProxyButton
 local activeWidgetDrag
+local pendingTrackingMenuAnchor
 local RefreshMinimap
 local ApplyBlizzardWidgetLayout
 local widgetMethods = setmetatable({}, { __mode = 'k' })
@@ -740,11 +747,12 @@ local function SetProxyButtonPressed(button, pressed)
 		return
 	end
 
+	button.icon:ClearAllPoints()
 	if pressed then
-		button.icon:SetPoint('TOPLEFT', button, 'TOPLEFT', 8, -8)
+		button.icon:SetPoint('CENTER', button, 'CENTER', PROXY_ICON_OFFSET_X + 1, PROXY_ICON_OFFSET_Y - 1)
 		button.overlay:Show()
 	else
-		button.icon:SetPoint('TOPLEFT', button, 'TOPLEFT', 6, -6)
+		button.icon:SetPoint('CENTER', button, 'CENTER', PROXY_ICON_OFFSET_X, PROXY_ICON_OFFSET_Y)
 		button.overlay:Hide()
 	end
 end
@@ -753,18 +761,18 @@ local function CreateProxyButton(name)
 	local button = CreateFrame('Button', name, _G.UIParent)
 	button:SetFrameStrata('MEDIUM')
 	button:SetFrameLevel(Minimap:GetFrameLevel() + 25)
-	button:SetSize(32, 32)
+	button:SetSize(PROXY_BUTTON_SIZE, PROXY_BUTTON_SIZE)
 	button:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
 
 	button.background = button:CreateTexture(nil, 'BACKGROUND')
 	button.background:SetTexture([[Interface\Minimap\UI-Minimap-Background]])
-	button.background:SetSize(25, 25)
-	button.background:SetPoint('TOPLEFT', button, 'TOPLEFT', 2, -4)
+	button.background:SetSize(PROXY_BACKGROUND_SIZE, PROXY_BACKGROUND_SIZE)
+	button.background:SetPoint('CENTER', button, 'CENTER', 0, 0)
 	button.background:SetVertexColor(1, 1, 1, 0.6)
 
 	button.icon = button:CreateTexture(nil, 'ARTWORK')
-	button.icon:SetSize(20, 20)
-	button.icon:SetPoint('TOPLEFT', button, 'TOPLEFT', 6, -6)
+	button.icon:SetSize(PROXY_ICON_SIZE, PROXY_ICON_SIZE)
+	button.icon:SetPoint('CENTER', button, 'CENTER', PROXY_ICON_OFFSET_X, PROXY_ICON_OFFSET_Y)
 
 	button.overlay = button:CreateTexture(nil, 'OVERLAY')
 	button.overlay:SetAllPoints(button.icon)
@@ -773,7 +781,7 @@ local function CreateProxyButton(name)
 
 	button.border = button:CreateTexture(nil, 'BORDER')
 	button.border:SetTexture([[Interface\Minimap\MiniMap-TrackingBorder]])
-	button.border:SetSize(54, 54)
+	button.border:SetSize(PROXY_BORDER_SIZE, PROXY_BORDER_SIZE)
 	button.border:SetPoint('TOPLEFT', button, 'TOPLEFT', 0, 0)
 
 	button:SetHighlightTexture([[Interface\Minimap\UI-Minimap-ZoomButton-Highlight]], 'ADD')
@@ -920,16 +928,62 @@ end
 local function ReanchorTrackingMenu(anchor)
 	local dropDown = _G.DropDownList1
 	if not anchor or not dropDown or not dropDown.IsShown or not dropDown:IsShown() then
-		return
+		return false
 	end
 
 	dropDown:ClearAllPoints()
 	dropDown:SetPoint('TOPRIGHT', anchor, 'BOTTOMRIGHT', 0, -2)
+	pendingTrackingMenuAnchor = nil
+	return true
+end
+
+local function QueueTrackingMenuReanchor(anchor)
+	if not anchor then
+		return
+	end
+
+	pendingTrackingMenuAnchor = anchor
+
+	local dropDown = _G.DropDownList1
+	if dropDown and dropDown.HookScript and not dropDown.__ProkinTrackingReanchorHooked then
+		dropDown:HookScript('OnShow', function()
+			if pendingTrackingMenuAnchor then
+				ReanchorTrackingMenu(pendingTrackingMenuAnchor)
+			end
+		end)
+		dropDown.__ProkinTrackingReanchorHooked = true
+	end
+
+	if ReanchorTrackingMenu(anchor) then
+		return
+	end
+
+	if type(C_Timer) == 'table' and type(C_Timer.After) == 'function' then
+		C_Timer.After(0, function()
+			if pendingTrackingMenuAnchor == anchor then
+				if not ReanchorTrackingMenu(anchor) then
+					pendingTrackingMenuAnchor = nil
+				end
+			end
+		end)
+	else
+		pendingTrackingMenuAnchor = nil
+	end
 end
 
 local function OpenTrackingMenu(anchor)
 	local button = GetTrackingButton()
 	if not button then
+		return
+	end
+
+	if _G.MiniMapTrackingDropDown and _G.MiniMapTracking then
+		if GameTooltip.GetOwner and GameTooltip:GetOwner() == _G.MiniMapTracking then
+			GameTooltip:Hide()
+		end
+
+		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, 'MiniMapTracking', 0, -5)
+		QueueTrackingMenuReanchor(anchor)
 		return
 	end
 
@@ -942,36 +996,23 @@ local function OpenTrackingMenu(anchor)
 		return
 	end
 
-	if _G.MiniMapTrackingDropDown and _G.MiniMapTracking then
-		if GameTooltip.GetOwner and GameTooltip:GetOwner() == _G.MiniMapTracking then
-			GameTooltip:Hide()
-		end
-
-		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, 'MiniMapTracking', 0, -5)
-		ReanchorTrackingMenu(anchor)
-		if type(PlaySound) == 'function' then
-			PlaySound('igMainMenuOptionCheckBoxOn')
-		end
-		return
-	end
-
 	local onMouseUp = button.GetScript and button:GetScript('OnMouseUp')
 	if onMouseUp then
 		onMouseUp(button, 'LeftButton')
-		ReanchorTrackingMenu(anchor)
+		QueueTrackingMenuReanchor(anchor)
 		return
 	end
 
 	local onClick = button.GetScript and button:GetScript('OnClick')
 	if onClick then
 		onClick(button, 'LeftButton')
-		ReanchorTrackingMenu(anchor)
+		QueueTrackingMenuReanchor(anchor)
 		return
 	end
 
 	if _G.MiniMapTrackingDropDown then
 		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, anchor, 0, -5)
-		ReanchorTrackingMenu(anchor)
+		QueueTrackingMenuReanchor(anchor)
 	end
 end
 

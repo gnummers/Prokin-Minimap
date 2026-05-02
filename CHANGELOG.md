@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.19
+- Fixed the tracking proxy to open Blizzard's TBC tracking dropdown through `MiniMapTrackingDropDown` and reanchor it after the menu appears
+- Matched the tracking proxy art to Blizzard's native TBC dimensions and tightened the widget overlap again to remove the last visible border gap
+
 ## v1.0.18
 - Increased the Blizzard widget border overlap so the minimap icons sit closer to the square border art
 - Switched the tracking proxy to Blizzard's exact TBC `MiniMapTracking` dropdown call for more reliable tracking-menu opening

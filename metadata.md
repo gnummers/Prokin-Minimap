@@ -58,8 +58,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.18.zip`
-- **Display Name:** Prokin-Minimap v1.0.18
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.19.zip`
+- **Display Name:** Prokin-Minimap v1.0.19
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -91,6 +91,8 @@ Saved variable:
 - Added explicit widget border overlap to eliminate the remaining visible gap between the square minimap border and Blizzard widgets
 - Increased the Blizzard widget border overlap so the minimap icons sit closer to the square border art
 - Switched the tracking proxy to Blizzard's exact TBC `MiniMapTracking` dropdown call for more reliable tracking-menu opening
+- Fixed the tracking proxy to open Blizzard's TBC tracking dropdown through `MiniMapTrackingDropDown` and reanchor it after the menu appears
+- Matched the tracking proxy art to Blizzard's native TBC dimensions and tightened the widget overlap again to remove the last visible border gap
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support
