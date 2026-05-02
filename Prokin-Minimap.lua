@@ -46,6 +46,7 @@ local lfgProxyButton
 local battlefieldProxyButton
 local activeWidgetDrag
 local pendingTrackingMenuAnchor
+local GetDatabase
 local RefreshMinimap
 local ApplyBlizzardWidgetLayout
 local widgetMethods = setmetatable({}, { __mode = 'k' })
@@ -71,6 +72,67 @@ local function Noop() end
 
 local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format('|cff33ff99%s|r: %s', ADDON_NAME, message))
+end
+
+local function IsTrackingDebugEnabled()
+	return GetDatabase().debugTracking == true
+end
+
+local function PrintTrackingDebug(message)
+	if not IsTrackingDebugEnabled() then
+		return
+	end
+
+	Print(string.format('[tracking-debug] %s', message))
+end
+
+local function GetFrameDebugName(frame)
+	if not frame then
+		return 'nil'
+	end
+
+	if frame.GetName then
+		local name = frame:GetName()
+		if name and name ~= '' then
+			return name
+		end
+	end
+
+	return tostring(frame)
+end
+
+local function HasFrameScript(frame, scriptName)
+	if not frame or not frame.HasScript or not frame.GetScript then
+		return false
+	end
+
+	return frame:HasScript(scriptName) and frame:GetScript(scriptName) ~= nil
+end
+
+local function DescribeFrame(frame)
+	if not frame then
+		return 'nil'
+	end
+
+	local parentName = 'nil'
+	local parent = frame.GetParent and frame:GetParent()
+	if parent then
+		parentName = GetFrameDebugName(parent)
+	end
+
+	local shown = frame.IsShown and frame:IsShown() and 'true' or 'false'
+	local mouseEnabled = frame.IsMouseEnabled and frame:IsMouseEnabled() and 'true' or 'false'
+
+	return string.format(
+		'%s shown=%s mouse=%s openMenu=%s onMouseUp=%s onClick=%s parent=%s',
+		GetFrameDebugName(frame),
+		shown,
+		mouseEnabled,
+		frame.OpenMenu and 'true' or 'false',
+		HasFrameScript(frame, 'OnMouseUp') and 'true' or 'false',
+		HasFrameScript(frame, 'OnClick') and 'true' or 'false',
+		parentName
+	)
 end
 
 local function HideTexture(name)
@@ -114,7 +176,7 @@ local function NormalizeStep(step)
 	return math.max(step, 1)
 end
 
-local function GetDatabase()
+GetDatabase = function()
 	if type(ProkinMinimapDB) ~= 'table' then
 		ProkinMinimapDB = {}
 	end
@@ -122,6 +184,10 @@ local function GetDatabase()
 	ProkinMinimapDB.size = NormalizeSize(ProkinMinimapDB.size) or DEFAULT_SIZE
 	if type(ProkinMinimapDB.widgetPositions) ~= 'table' then
 		ProkinMinimapDB.widgetPositions = {}
+	end
+	if type(ProkinMinimapDB.debugTrackingConfigured) ~= 'boolean' then
+		ProkinMinimapDB.debugTracking = false
+		ProkinMinimapDB.debugTrackingConfigured = false
 	end
 	return ProkinMinimapDB
 end
@@ -504,20 +570,35 @@ local function GetTrackingButton()
 	AddCandidate(_G.MinimapToggleButton)
 	AddCandidate(_G.MiniMapTrackingFrame)
 
+	if IsTrackingDebugEnabled() then
+		for index, frame in ipairs(candidates) do
+			PrintTrackingDebug(string.format('candidate[%d]: %s', index, DescribeFrame(frame)))
+		end
+	end
+
 	for _, frame in ipairs(candidates) do
 		if frame.OpenMenu then
+			PrintTrackingDebug(string.format('selected tracking frame via OpenMenu: %s', DescribeFrame(frame)))
 			return frame
 		end
 
 		if frame.HasScript then
 			if frame:HasScript('OnMouseUp') and frame:GetScript('OnMouseUp') then
+				PrintTrackingDebug(string.format('selected tracking frame via OnMouseUp: %s', DescribeFrame(frame)))
 				return frame
 			end
 
 			if frame:HasScript('OnClick') and frame:GetScript('OnClick') then
+				PrintTrackingDebug(string.format('selected tracking frame via OnClick: %s', DescribeFrame(frame)))
 				return frame
 			end
 		end
+	end
+
+	if candidates[1] then
+		PrintTrackingDebug(string.format('falling back to first tracking candidate: %s', DescribeFrame(candidates[1])))
+	else
+		PrintTrackingDebug('no tracking candidates were found')
 	end
 
 	return candidates[1]
@@ -790,8 +871,11 @@ local function CreateProxyButton(name)
 		highlight:SetAllPoints(button)
 	end
 
-	button:SetScript('OnMouseDown', function(self)
+	button:SetScript('OnMouseDown', function(self, mouseButton)
 		SetProxyButtonPressed(self, true)
+		if self.__ProkinMouseDownHandler then
+			self:__ProkinMouseDownHandler(mouseButton)
+		end
 	end)
 	button:SetScript('OnMouseUp', function(self, mouseButton)
 		SetProxyButtonPressed(self, false)
@@ -806,6 +890,14 @@ end
 local function BeginWidgetDrag(frame, widgetId, useStoredAnchor)
 	if not frame or not widgetId then
 		return
+	end
+
+	if frame == trackingProxyButton then
+		local trackingButton = GetTrackingButton()
+		if trackingButton and trackingButton.CloseMenu and trackingButton.IsMenuOpen and trackingButton:IsMenuOpen() then
+			trackingButton:CloseMenu()
+			PrintTrackingDebug(string.format('closed tracking menu before dragging %s', GetFrameDebugName(frame)))
+		end
 	end
 
 	activeWidgetDrag = {
@@ -832,6 +924,10 @@ local function StopWidgetDrag(frame)
 
 	if frame.overlay then
 		SetProxyButtonPressed(frame, false)
+	end
+
+	if frame == trackingProxyButton then
+		PrintTrackingDebug(string.format('tracking drag stopped; suppressing next click on %s', GetFrameDebugName(frame)))
 	end
 
 	frame.__ProkinSuppressClick = true
@@ -878,6 +974,9 @@ local function WrapWidgetScript(frame, scriptName)
 	if originalScript then
 		frame:SetScript(scriptName, function(self, ...)
 			if self.__ProkinSuppressClick then
+				if self == trackingProxyButton then
+					PrintTrackingDebug(string.format('suppressed tracking proxy %s after drag on %s', scriptName, GetFrameDebugName(self)))
+				end
 				self.__ProkinSuppressClick = nil
 				return
 			end
@@ -928,12 +1027,14 @@ end
 local function ReanchorTrackingMenu(anchor)
 	local dropDown = _G.DropDownList1
 	if not anchor or not dropDown or not dropDown.IsShown or not dropDown:IsShown() then
+		PrintTrackingDebug(string.format('reanchor skipped; anchor=%s dropdownShown=%s', GetFrameDebugName(anchor), dropDown and dropDown.IsShown and dropDown:IsShown() and 'true' or 'false'))
 		return false
 	end
 
 	dropDown:ClearAllPoints()
 	dropDown:SetPoint('TOPRIGHT', anchor, 'BOTTOMRIGHT', 0, -2)
 	pendingTrackingMenuAnchor = nil
+	PrintTrackingDebug(string.format('reanchored dropdown %s to %s', GetFrameDebugName(dropDown), GetFrameDebugName(anchor)))
 	return true
 end
 
@@ -947,11 +1048,16 @@ local function QueueTrackingMenuReanchor(anchor)
 	local dropDown = _G.DropDownList1
 	if dropDown and dropDown.HookScript and not dropDown.__ProkinTrackingReanchorHooked then
 		dropDown:HookScript('OnShow', function()
+			PrintTrackingDebug(string.format('dropdown shown: %s pendingAnchor=%s', GetFrameDebugName(dropDown), GetFrameDebugName(pendingTrackingMenuAnchor)))
 			if pendingTrackingMenuAnchor then
 				ReanchorTrackingMenu(pendingTrackingMenuAnchor)
 			end
 		end)
+		dropDown:HookScript('OnHide', function()
+			PrintTrackingDebug(string.format('dropdown hidden: %s', GetFrameDebugName(dropDown)))
+		end)
 		dropDown.__ProkinTrackingReanchorHooked = true
+		PrintTrackingDebug(string.format('hooked dropdown debug handlers on %s', GetFrameDebugName(dropDown)))
 	end
 
 	if ReanchorTrackingMenu(anchor) then
@@ -962,19 +1068,147 @@ local function QueueTrackingMenuReanchor(anchor)
 		C_Timer.After(0, function()
 			if pendingTrackingMenuAnchor == anchor then
 				if not ReanchorTrackingMenu(anchor) then
+					PrintTrackingDebug(string.format('next-frame reanchor failed for anchor=%s', GetFrameDebugName(anchor)))
 					pendingTrackingMenuAnchor = nil
 				end
 			end
 		end)
 	else
+		PrintTrackingDebug('C_Timer.After is unavailable; clearing pending tracking menu anchor')
 		pendingTrackingMenuAnchor = nil
 	end
+end
+
+local function IsModernTrackingDropdownButton(button)
+	return button
+		and button.OpenMenu
+		and button.SetMenuAnchor
+		and not _G.MiniMapTrackingDropDown
+end
+
+local function RetargetTrackingMenuAnchor(button, anchor)
+	if not button or not anchor or not button.SetMenuAnchor then
+		return false
+	end
+
+	if type(AnchorUtil) ~= 'table' or type(AnchorUtil.CreateAnchor) ~= 'function' then
+		PrintTrackingDebug('AnchorUtil.CreateAnchor is unavailable for modern tracking menu retargeting')
+		return false
+	end
+
+	local menuAnchor = AnchorUtil.CreateAnchor(
+		button.menuPoint or 'TOPLEFT',
+		anchor,
+		button.menuRelativePoint or 'BOTTOMLEFT',
+		button.menuPointX or 0,
+		button.menuPointY or 0
+	)
+
+	button:SetMenuAnchor(menuAnchor)
+	PrintTrackingDebug(string.format('retargeted modern tracking menu anchor to %s', GetFrameDebugName(anchor)))
+	return true
+end
+
+local function OpenModernTrackingMenuOnProxy(button, anchor)
+	if not button or not anchor then
+		return false
+	end
+
+	if button.IsMenuOpen and button:IsMenuOpen() then
+		PrintTrackingDebug(string.format('modern tracking menu already open on %s; closing it', GetFrameDebugName(button)))
+		if button.CloseMenu then
+			button:CloseMenu()
+			return true
+		end
+	end
+
+	if type(AnchorUtil) ~= 'table' or type(AnchorUtil.CreateAnchor) ~= 'function' then
+		PrintTrackingDebug('AnchorUtil.CreateAnchor is unavailable for proxy-owned modern tracking menu')
+		return false
+	end
+
+	if not button.GenerateMenu or not button.GetMenuDescription then
+		PrintTrackingDebug(string.format('modern tracking button %s cannot generate a menu description', GetFrameDebugName(button)))
+		return false
+	end
+
+	button:GenerateMenu()
+	local menuDescription = button:GetMenuDescription()
+	if not menuDescription then
+		PrintTrackingDebug(string.format('modern tracking button %s generated no menu description', GetFrameDebugName(button)))
+		return false
+	end
+
+	if type(Menu) ~= 'table' or not Menu.GetManager then
+		PrintTrackingDebug('Menu.GetManager is unavailable for proxy-owned modern tracking menu')
+		return false
+	end
+
+	local menuAnchor = AnchorUtil.CreateAnchor(
+		button.menuPoint or 'TOPLEFT',
+		anchor,
+		button.menuRelativePoint or 'BOTTOMLEFT',
+		button.menuPointX or 0,
+		button.menuPointY or 0
+	)
+
+	local menuManager = Menu.GetManager()
+	local menu = menuManager and menuManager:OpenMenu(anchor, menuDescription, menuAnchor)
+	button.menu = menu
+	if menu then
+		if button.onMenuClosedCallback then
+			menu:SetClosedCallback(button.onMenuClosedCallback)
+		end
+
+		if button.OnMenuOpened then
+			button:OnMenuOpened(menu)
+		end
+	end
+
+	PrintTrackingDebug(string.format(
+		'opened modern tracking menu on proxy owner=%s menu=%s menuOpen=%s',
+		GetFrameDebugName(anchor),
+		menu and GetFrameDebugName(menu) or 'nil',
+		button.IsMenuOpen and button:IsMenuOpen() and 'true' or 'false'
+	))
+	return menu ~= nil
 end
 
 local function OpenTrackingMenu(anchor)
 	local button = GetTrackingButton()
 	if not button then
+		PrintTrackingDebug('OpenTrackingMenu aborted because no tracking button was found')
 		return
+	end
+
+	PrintTrackingDebug(string.format(
+		'OpenTrackingMenu anchor=%s resolvedButton=%s dropdownExists=%s minimapTracking=%s',
+		GetFrameDebugName(anchor),
+		DescribeFrame(button),
+		_G.MiniMapTrackingDropDown and 'true' or 'false',
+		_G.MiniMapTracking and DescribeFrame(_G.MiniMapTracking) or 'nil'
+	))
+
+	if IsModernTrackingDropdownButton(button) then
+		if OpenModernTrackingMenuOnProxy(button, anchor) then
+			return
+		end
+
+		RetargetTrackingMenuAnchor(button, anchor)
+
+		local onMouseDown = button.GetScript and button:GetScript('OnMouseDown')
+		if onMouseDown then
+			PrintTrackingDebug(string.format('opening tracking menu via OnMouseDown script on %s', GetFrameDebugName(button)))
+			onMouseDown(button, 'LeftButton')
+			PrintTrackingDebug(string.format(
+				'post-modern-script menuOpen=%s menu=%s',
+				button.IsMenuOpen and button:IsMenuOpen() and 'true' or 'false',
+				button.menu and GetFrameDebugName(button.menu) or 'nil'
+			))
+			return
+		end
+
+		PrintTrackingDebug('modern tracking button detected, but no mouse-down opener was available')
 	end
 
 	if _G.MiniMapTrackingDropDown and _G.MiniMapTracking then
@@ -982,12 +1216,15 @@ local function OpenTrackingMenu(anchor)
 			GameTooltip:Hide()
 		end
 
+		PrintTrackingDebug('opening tracking menu via ToggleDropDownMenu anchored to MiniMapTracking')
 		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, 'MiniMapTracking', 0, -5)
+		PrintTrackingDebug(string.format('post-toggle dropdown shown=%s', _G.DropDownList1 and _G.DropDownList1.IsShown and _G.DropDownList1:IsShown() and 'true' or 'false'))
 		QueueTrackingMenuReanchor(anchor)
 		return
 	end
 
 	if button.OpenMenu then
+		PrintTrackingDebug(string.format('opening tracking menu via OpenMenu on %s', GetFrameDebugName(button)))
 		button:OpenMenu()
 		if button.menu and button.menu.ClearAllPoints and button.menu.SetPoint then
 			button.menu:ClearAllPoints()
@@ -998,22 +1235,31 @@ local function OpenTrackingMenu(anchor)
 
 	local onMouseUp = button.GetScript and button:GetScript('OnMouseUp')
 	if onMouseUp then
+		PrintTrackingDebug(string.format('opening tracking menu via OnMouseUp on %s', GetFrameDebugName(button)))
 		onMouseUp(button, 'LeftButton')
+		PrintTrackingDebug(string.format('post-OnMouseUp dropdown shown=%s', _G.DropDownList1 and _G.DropDownList1.IsShown and _G.DropDownList1:IsShown() and 'true' or 'false'))
 		QueueTrackingMenuReanchor(anchor)
 		return
 	end
 
 	local onClick = button.GetScript and button:GetScript('OnClick')
 	if onClick then
+		PrintTrackingDebug(string.format('opening tracking menu via OnClick on %s', GetFrameDebugName(button)))
 		onClick(button, 'LeftButton')
+		PrintTrackingDebug(string.format('post-OnClick dropdown shown=%s', _G.DropDownList1 and _G.DropDownList1.IsShown and _G.DropDownList1:IsShown() and 'true' or 'false'))
 		QueueTrackingMenuReanchor(anchor)
 		return
 	end
 
 	if _G.MiniMapTrackingDropDown then
+		PrintTrackingDebug(string.format('opening tracking menu via fallback ToggleDropDownMenu anchored to %s', GetFrameDebugName(anchor)))
 		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, anchor, 0, -5)
+		PrintTrackingDebug(string.format('post-fallback toggle dropdown shown=%s', _G.DropDownList1 and _G.DropDownList1.IsShown and _G.DropDownList1:IsShown() and 'true' or 'false'))
 		QueueTrackingMenuReanchor(anchor)
+		return
 	end
+
+	PrintTrackingDebug('OpenTrackingMenu exhausted all paths without opening a dropdown')
 end
 
 local function EnsureTrackingProxy()
@@ -1022,10 +1268,33 @@ local function EnsureTrackingProxy()
 	end
 
 	trackingProxyButton = CreateProxyButton('ProkinMinimapTrackingProxy')
-	trackingProxyButton.__ProkinMouseUpHandler = function(self, mouseButton)
+	trackingProxyButton.__ProkinMouseDownHandler = function(self, mouseButton)
+		PrintTrackingDebug(string.format(
+			'tracking proxy mouse down button=%s activeDrag=%s suppressClick=%s self=%s',
+			tostring(mouseButton),
+			activeWidgetDrag and 'true' or 'false',
+			self.__ProkinSuppressClick and 'true' or 'false',
+			DescribeFrame(self)
+		))
 		if mouseButton == 'LeftButton' then
 			OpenTrackingMenu(self)
 		end
+	end
+	trackingProxyButton.__ProkinMouseUpHandler = function(self, mouseButton)
+		PrintTrackingDebug(string.format(
+			'tracking proxy mouse up button=%s activeDrag=%s suppressClick=%s self=%s',
+			tostring(mouseButton),
+			activeWidgetDrag and 'true' or 'false',
+			self.__ProkinSuppressClick and 'true' or 'false',
+			DescribeFrame(self)
+		))
+	end
+	trackingProxyButton.HandlesGlobalMouseEvent = function(_, buttonName, event)
+		local handled = event == 'GLOBAL_MOUSE_DOWN' and buttonName == 'LeftButton'
+		if handled then
+			PrintTrackingDebug(string.format('tracking proxy handled global mouse event button=%s event=%s', tostring(buttonName), tostring(event)))
+		end
+		return handled
 	end
 	trackingProxyButton:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
@@ -1397,7 +1666,7 @@ local function SetMinimapSize(size)
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Use /pkm size <number>, /pkm larger [step], /pkm smaller [step], or /pkm reset.', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Use /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -1435,6 +1704,21 @@ local function HandleSlashCommand(message)
 	if command == 'reset' or command == 'default' then
 		local size = SetMinimapSize(DEFAULT_SIZE)
 		Print(string.format('Minimap size reset to %dx%d.', size, size))
+		return
+	end
+
+	if command == 'trackingdebug' then
+		local state = string.lower(remainder or '')
+		if state == 'off' or state == 'disable' or state == 'disabled' then
+			GetDatabase().debugTracking = false
+		elseif state == 'on' or state == 'enable' or state == 'enabled' then
+			GetDatabase().debugTracking = true
+		else
+			GetDatabase().debugTracking = not GetDatabase().debugTracking
+		end
+		GetDatabase().debugTrackingConfigured = true
+
+		Print(string.format('Tracking debug is now %s.', GetDatabase().debugTracking and 'enabled' or 'disabled'))
 		return
 	end
 

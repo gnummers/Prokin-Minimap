@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.20
+- Fixed the Tracking proxy on TBC Anniversary's modern Blizzard minimap by opening the generated tracking menu directly on the proxy owner region
+- Preserved Tracking drag behavior while moving menu activation onto Blizzard's required mouse-down flow and handling the menu system's global mouse event correctly
+- Added an opt-in `/pkm trackingdebug` diagnostic toggle and changed tracking debug logging to default off for public builds
+
 ## v1.0.19
 - Fixed the tracking proxy to open Blizzard's TBC tracking dropdown through `MiniMapTrackingDropDown` and reanchor it after the menu appears
 - Matched the tracking proxy art to Blizzard's native TBC dimensions and tightened the widget overlap again to remove the last visible border gap
