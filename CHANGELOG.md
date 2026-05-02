@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.11
+- Added MinimapButtonButton compatibility for the Blizzard tracking, LFG/queue, clock, mail, and PvP/battleground widgets
+- Preserves the original widget methods so Prokin-Minimap can still reparent and anchor those frames even after MinimapButtonButton overrides them
+- Writes those Blizzard widgets into the MinimapButtonButton blacklist so they stay out of its collected button tray on future loads
+
 ## v1.0.10
 - Restored the Blizzard tracking, LFG/queue, clock, mail, and PvP/battleground minimap widgets
 - Anchored those Blizzard widgets just outside the square minimap border

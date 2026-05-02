@@ -1,6 +1,7 @@
 local ADDON_NAME = ...
 local HYBRID_MINIMAP_ADDON = 'Blizzard_HybridMinimap'
 local AUTOMARKASSIST_ADDON = 'AutoMarkAssist'
+local MINIMAPBUTTONBUTTON_ADDON = 'MinimapButtonButton'
 local TIME_MANAGER_ADDON = 'Blizzard_TimeManager'
 local DEFAULT_SIZE = 400
 local MIN_SIZE = 100
@@ -28,6 +29,18 @@ local autoMarkAssistHookInstalled
 local adjustingWidgetLayout
 local RefreshMinimap
 local ApplyBlizzardWidgetLayout
+local widgetMethods = setmetatable({}, { __mode = 'k' })
+local WIDGET_BLACKLIST_NAMES = {
+	'MiniMapTracking',
+	'MiniMapTrackingFrame',
+	'GameTimeFrame',
+	'TimeManagerClockButton',
+	'MiniMapMailFrame',
+	'MiniMapBattlefieldFrame',
+	'QueueStatusButton',
+	'MiniMapLFGFrame',
+	'LFGMinimapFrame'
+}
 
 local function Noop() end
 
@@ -451,14 +464,58 @@ local function GetBattlefieldFrame()
 	return _G.MiniMapBattlefieldFrame
 end
 
+local function PreserveWidgetMethods(frame)
+	if not frame or widgetMethods[frame] then
+		return
+	end
+
+	widgetMethods[frame] = {
+		ClearAllPoints = frame.ClearAllPoints,
+		SetPoint = frame.SetPoint,
+		SetParent = frame.SetParent,
+		SetScale = frame.SetScale,
+		Show = frame.Show
+	}
+end
+
+local function CallWidgetMethod(frame, methodName, ...)
+	local methods = widgetMethods[frame]
+	local method = methods and methods[methodName]
+	if not method then
+		method = frame and frame[methodName]
+	end
+
+	if method then
+		return method(frame, ...)
+	end
+end
+
+local function EnsureMinimapButtonButtonBlacklist()
+	if type(_G.MinimapButtonButtonOptions) ~= 'table' then
+		_G.MinimapButtonButtonOptions = {}
+	end
+
+	if type(_G.MinimapButtonButtonOptions.blacklist) ~= 'table' then
+		_G.MinimapButtonButtonOptions.blacklist = {}
+	end
+
+	for _, frameName in ipairs(WIDGET_BLACKLIST_NAMES) do
+		_G.MinimapButtonButtonOptions.blacklist[frameName] = true
+	end
+end
+
 local function AnchorWidget(frame, point, relativePoint, xOffset, yOffset)
 	if not frame or not Minimap or adjustingWidgetLayout then
 		return
 	end
 
+	PreserveWidgetMethods(frame)
+
 	adjustingWidgetLayout = true
-	frame:ClearAllPoints()
-	frame:SetPoint(point, Minimap, relativePoint, xOffset, yOffset)
+	CallWidgetMethod(frame, 'SetParent', Minimap)
+	CallWidgetMethod(frame, 'SetScale', 1)
+	CallWidgetMethod(frame, 'ClearAllPoints')
+	CallWidgetMethod(frame, 'SetPoint', point, Minimap, relativePoint, xOffset, yOffset)
 	adjustingWidgetLayout = false
 end
 
@@ -476,6 +533,7 @@ end
 ApplyBlizzardWidgetLayout = function()
 	local tracking = GetTrackingFrame()
 	if tracking then
+		PreserveWidgetMethods(tracking)
 		HookWidgetPosition(tracking)
 		AnchorWidget(tracking, 'TOPRIGHT', 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
 		HideTextureObject(_G.MiniMapTrackingButtonBorder)
@@ -488,6 +546,7 @@ ApplyBlizzardWidgetLayout = function()
 
 	local lfg = GetLFGFrame()
 	if lfg then
+		PreserveWidgetMethods(lfg)
 		HookWidgetPosition(lfg)
 		AnchorWidget(lfg, 'TOPLEFT', 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
 		HideTextureObject(_G.MiniMapLFGFrameBorder or _G.MiniMapLFGBorder or _G.LFGMinimapFrameBorder)
@@ -498,6 +557,7 @@ ApplyBlizzardWidgetLayout = function()
 
 	local clock = GetClockFrame()
 	if clock then
+		PreserveWidgetMethods(clock)
 		HookWidgetPosition(clock)
 		AnchorWidget(clock, 'TOP', 'BOTTOM', 0, -WIDGET_EDGE_PADDING)
 		if clock.Show then
@@ -507,6 +567,7 @@ ApplyBlizzardWidgetLayout = function()
 
 	local mail = GetMailFrame()
 	if mail then
+		PreserveWidgetMethods(mail)
 		HookWidgetPosition(mail)
 		AnchorWidget(mail, 'BOTTOMRIGHT', 'BOTTOMLEFT', -WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
 		if mail.Show then
@@ -516,6 +577,7 @@ ApplyBlizzardWidgetLayout = function()
 
 	local battlefield = GetBattlefieldFrame()
 	if battlefield then
+		PreserveWidgetMethods(battlefield)
 		HookWidgetPosition(battlefield)
 		AnchorWidget(battlefield, 'BOTTOMLEFT', 'BOTTOMRIGHT', WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
 		if battlefield.Show then
@@ -572,6 +634,7 @@ end
 
 RefreshMinimap = function()
 	_G.GetMinimapShape = GetSquareMinimapShape
+	EnsureMinimapButtonButtonBlacklist()
 	ApplySquareMinimap()
 	EnsureMinimapBorder()
 	ApplyZoneLayout()
@@ -692,6 +755,7 @@ local function InstallHooks()
 		hooksecurefunc('SetLookingForGroupUIAvailable', ApplyBlizzardWidgetLayout)
 	end
 
+	EnsureMinimapButtonButtonBlacklist()
 	ApplyBlizzardWidgetLayout()
 	InstallAutoMarkAssistCompatibility()
 
@@ -715,6 +779,9 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 			InstallHooks()
 		elseif arg1 == HYBRID_MINIMAP_ADDON then
 			ApplyHybridMinimap()
+		elseif arg1 == MINIMAPBUTTONBUTTON_ADDON then
+			EnsureMinimapButtonButtonBlacklist()
+			ApplyBlizzardWidgetLayout()
 		elseif arg1 == TIME_MANAGER_ADDON then
 			ApplyBlizzardWidgetLayout()
 		elseif arg1 == AUTOMARKASSIST_ADDON then
@@ -740,4 +807,6 @@ eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	if timeSuffix ~= lastZoneTimeSuffix then
 		UpdateZoneHeaderText()
 	end
+
+	ApplyBlizzardWidgetLayout()
 end)

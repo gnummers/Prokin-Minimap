@@ -14,7 +14,7 @@
 
 ## Summary
 
-Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, custom icon support, polished header handling, a server-time zone label, and compatibility shims for minimap buttons and Blizzard widgets.
+Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, custom icon support, polished header handling, a server-time zone label, and compatibility shims for minimap buttons, Blizzard widgets, and MinimapButtonButton.
 
 ## Description
 
@@ -28,6 +28,7 @@ Features:
 - Minimap zoom in and out with the mouse wheel
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
 - Keeps the Blizzard tracking button, LFG icon, clock, mail icon, and PvP or battleground indicator visible just outside the square minimap border
+- Includes MinimapButtonButton compatibility so those Blizzard widgets are not pulled into its collected button tray
 - Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
 - Persistent square resizing with a default size of `400x400`
 - Header spacing that keeps the zone text visible when the minimap is enlarged
@@ -54,8 +55,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.10.zip`
-- **Display Name:** Prokin-Minimap v1.0.10
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.11.zip`
+- **Display Name:** Prokin-Minimap v1.0.11
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -71,6 +72,7 @@ Saved variable:
 - Fixed TBC Anniversary compatibility by avoiding `Set*Texture(nil)` calls on Blizzard minimap header buttons
 - Added AutoMarkAssist minimap button compatibility so its icon is clamped to the square minimap edge
 - Restored the Blizzard tracking, LFG, clock, mail, and PvP or battleground widgets and anchored them outside the square minimap border
+- Added MinimapButtonButton compatibility so those Blizzard widgets stay outside the square minimap instead of being collected into its tray
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support
