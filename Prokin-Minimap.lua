@@ -1,12 +1,14 @@
 local ADDON_NAME = ...
 local HYBRID_MINIMAP_ADDON = 'Blizzard_HybridMinimap'
 local AUTOMARKASSIST_ADDON = 'AutoMarkAssist'
+local TIME_MANAGER_ADDON = 'Blizzard_TimeManager'
 local DEFAULT_SIZE = 400
 local MIN_SIZE = 100
 local MAX_SIZE = 800
 local DEFAULT_STEP = 25
 local HEADER_SPACING = 4
 local BORDER_SIZE = 1
+local WIDGET_EDGE_PADDING = 4
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
@@ -23,6 +25,9 @@ local eventFrame
 local zoneTimeElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
+local adjustingWidgetLayout
+local RefreshMinimap
+local ApplyBlizzardWidgetLayout
 
 local function Noop() end
 
@@ -33,6 +38,13 @@ end
 local function HideTexture(name)
 	local texture = _G[name]
 	if texture then
+		texture:Hide()
+	end
+end
+
+local function HideTextureObject(texture)
+	if texture then
+		texture:SetTexture(nil)
 		texture:Hide()
 	end
 end
@@ -412,6 +424,106 @@ local function GetSquareMinimapShape()
 	return 'SQUARE'
 end
 
+local function GetTrackingFrame()
+	local cluster = _G.MinimapCluster
+	if cluster then
+		return cluster.Tracking or cluster.TrackingFrame
+	end
+
+	return _G.MiniMapTrackingFrame or _G.MiniMapTracking
+end
+
+local function GetClockFrame()
+	return _G.TimeManagerClockButton or _G.GameTimeFrame
+end
+
+local function GetMailFrame()
+	local cluster = _G.MinimapCluster
+	local indicator = cluster and cluster.IndicatorFrame
+	return (indicator and indicator.MailFrame) or _G.MiniMapMailFrame
+end
+
+local function GetLFGFrame()
+	return _G.QueueStatusButton or _G.MiniMapLFGFrame or _G.LFGMinimapFrame
+end
+
+local function GetBattlefieldFrame()
+	return _G.MiniMapBattlefieldFrame
+end
+
+local function AnchorWidget(frame, point, relativePoint, xOffset, yOffset)
+	if not frame or not Minimap or adjustingWidgetLayout then
+		return
+	end
+
+	adjustingWidgetLayout = true
+	frame:ClearAllPoints()
+	frame:SetPoint(point, Minimap, relativePoint, xOffset, yOffset)
+	adjustingWidgetLayout = false
+end
+
+local function HookWidgetPosition(frame)
+	if not frame or frame.__ProkinWidgetHooked or not frame.SetPoint then
+		return
+	end
+
+	frame.__ProkinWidgetHooked = true
+	hooksecurefunc(frame, 'SetPoint', function()
+		ApplyBlizzardWidgetLayout()
+	end)
+end
+
+ApplyBlizzardWidgetLayout = function()
+	local tracking = GetTrackingFrame()
+	if tracking then
+		HookWidgetPosition(tracking)
+		AnchorWidget(tracking, 'TOPRIGHT', 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		HideTextureObject(_G.MiniMapTrackingButtonBorder)
+		HideTextureObject(_G.MiniMapTrackingBorder)
+		HideTextureObject(_G.MiniMapTrackingBackground)
+		if tracking.Show then
+			tracking:Show()
+		end
+	end
+
+	local lfg = GetLFGFrame()
+	if lfg then
+		HookWidgetPosition(lfg)
+		AnchorWidget(lfg, 'TOPLEFT', 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		HideTextureObject(_G.MiniMapLFGFrameBorder or _G.MiniMapLFGBorder or _G.LFGMinimapFrameBorder)
+		if lfg.Show then
+			lfg:Show()
+		end
+	end
+
+	local clock = GetClockFrame()
+	if clock then
+		HookWidgetPosition(clock)
+		AnchorWidget(clock, 'TOP', 'BOTTOM', 0, -WIDGET_EDGE_PADDING)
+		if clock.Show then
+			clock:Show()
+		end
+	end
+
+	local mail = GetMailFrame()
+	if mail then
+		HookWidgetPosition(mail)
+		AnchorWidget(mail, 'BOTTOMRIGHT', 'BOTTOMLEFT', -WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
+		if mail.Show then
+			mail:Show()
+		end
+	end
+
+	local battlefield = GetBattlefieldFrame()
+	if battlefield then
+		HookWidgetPosition(battlefield)
+		AnchorWidget(battlefield, 'BOTTOMLEFT', 'BOTTOMRIGHT', WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
+		if battlefield.Show then
+			battlefield:Show()
+		end
+	end
+end
+
 local function PositionButtonOnSquareEdge(button, angle)
 	if not Minimap or not button then
 		return
@@ -458,12 +570,13 @@ local function InstallAutoMarkAssistCompatibility()
 	ApplyAutoMarkAssistCompatibility()
 end
 
-local function RefreshMinimap()
+RefreshMinimap = function()
 	_G.GetMinimapShape = GetSquareMinimapShape
 	ApplySquareMinimap()
 	EnsureMinimapBorder()
 	ApplyZoneLayout()
 	HideDefaultZoneHeader()
+	ApplyBlizzardWidgetLayout()
 	ApplyHybridMinimap()
 	InstallAutoMarkAssistCompatibility()
 	ApplyAutoMarkAssistCompatibility()
@@ -576,8 +689,10 @@ local function InstallHooks()
 
 	if type(SetLookingForGroupUIAvailable) == 'function' then
 		hooksecurefunc('SetLookingForGroupUIAvailable', HideDefaultZoneHeader)
+		hooksecurefunc('SetLookingForGroupUIAvailable', ApplyBlizzardWidgetLayout)
 	end
 
+	ApplyBlizzardWidgetLayout()
 	InstallAutoMarkAssistCompatibility()
 
 	for _, event in ipairs({
@@ -600,6 +715,8 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 			InstallHooks()
 		elseif arg1 == HYBRID_MINIMAP_ADDON then
 			ApplyHybridMinimap()
+		elseif arg1 == TIME_MANAGER_ADDON then
+			ApplyBlizzardWidgetLayout()
 		elseif arg1 == AUTOMARKASSIST_ADDON then
 			InstallAutoMarkAssistCompatibility()
 		else
