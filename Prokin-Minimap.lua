@@ -27,19 +27,26 @@ local zoneTimeElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
 local adjustingWidgetLayout
+local trackingProxyButton
+local lfgProxyButton
 local RefreshMinimap
 local ApplyBlizzardWidgetLayout
 local widgetMethods = setmetatable({}, { __mode = 'k' })
 local WIDGET_BLACKLIST_NAMES = {
 	'MiniMapTracking',
 	'MiniMapTrackingFrame',
+	'MiniMapTrackingButton',
+	'MinimapToggleButton',
+	'QueueStatusMinimapButton',
 	'GameTimeFrame',
 	'TimeManagerClockButton',
 	'MiniMapMailFrame',
 	'MiniMapBattlefieldFrame',
 	'QueueStatusButton',
 	'MiniMapLFGFrame',
-	'LFGMinimapFrame'
+	'LFGMinimapFrame',
+	'ProkinMinimapTrackingProxy',
+	'ProkinMinimapLFGProxy'
 }
 
 local function Noop() end
@@ -440,10 +447,14 @@ end
 local function GetTrackingFrame()
 	local cluster = _G.MinimapCluster
 	if cluster then
+		if cluster.Tracking and cluster.Tracking.Button then
+			return cluster.Tracking.Button
+		end
+
 		return cluster.Tracking or cluster.TrackingFrame
 	end
 
-	return _G.MiniMapTrackingFrame or _G.MiniMapTracking
+	return _G.MiniMapTrackingButton or _G.MinimapToggleButton or _G.MiniMapTrackingFrame or _G.MiniMapTracking
 end
 
 local function GetClockFrame()
@@ -457,7 +468,7 @@ local function GetMailFrame()
 end
 
 local function GetLFGFrame()
-	return _G.QueueStatusButton or _G.MiniMapLFGFrame or _G.LFGMinimapFrame
+	return _G.QueueStatusMinimapButton or _G.QueueStatusButton or _G.MiniMapLFGFrame or _G.LFGMinimapFrame
 end
 
 local function GetBattlefieldFrame()
@@ -530,28 +541,225 @@ local function HookWidgetPosition(frame)
 	end)
 end
 
+local function SetProxyButtonPressed(button, pressed)
+	if not button or not button.icon or not button.overlay then
+		return
+	end
+
+	if pressed then
+		button.icon:SetPoint('TOPLEFT', button, 'TOPLEFT', 8, -8)
+		button.overlay:Show()
+	else
+		button.icon:SetPoint('TOPLEFT', button, 'TOPLEFT', 6, -6)
+		button.overlay:Hide()
+	end
+end
+
+local function CreateProxyButton(name)
+	local button = CreateFrame('Button', name, Minimap)
+	button:SetFrameStrata('MEDIUM')
+	button:SetFrameLevel(Minimap:GetFrameLevel() + 25)
+	button:SetSize(32, 32)
+	button:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
+
+	button.background = button:CreateTexture(nil, 'BACKGROUND')
+	button.background:SetTexture([[Interface\Minimap\UI-Minimap-Background]])
+	button.background:SetSize(25, 25)
+	button.background:SetPoint('TOPLEFT', button, 'TOPLEFT', 2, -4)
+	button.background:SetVertexColor(1, 1, 1, 0.6)
+
+	button.icon = button:CreateTexture(nil, 'ARTWORK')
+	button.icon:SetSize(20, 20)
+	button.icon:SetPoint('TOPLEFT', button, 'TOPLEFT', 6, -6)
+
+	button.overlay = button:CreateTexture(nil, 'OVERLAY')
+	button.overlay:SetAllPoints(button.icon)
+	button.overlay:SetColorTexture(0, 0, 0, 0.5)
+	button.overlay:Hide()
+
+	button.border = button:CreateTexture(nil, 'BORDER')
+	button.border:SetTexture([[Interface\Minimap\MiniMap-TrackingBorder]])
+	button.border:SetSize(54, 54)
+	button.border:SetPoint('TOPLEFT', button, 'TOPLEFT', 0, 0)
+
+	button:SetHighlightTexture([[Interface\Minimap\UI-Minimap-ZoomButton-Highlight]], 'ADD')
+	local highlight = button:GetHighlightTexture()
+	if highlight then
+		highlight:SetAllPoints(button)
+	end
+
+	button:SetScript('OnMouseDown', function(self)
+		SetProxyButtonPressed(self, true)
+	end)
+	button:SetScript('OnMouseUp', function(self)
+		SetProxyButtonPressed(self, false)
+	end)
+
+	return button
+end
+
+local function EnsureTrackingProxy()
+	if trackingProxyButton or not Minimap then
+		return
+	end
+
+	trackingProxyButton = CreateProxyButton('ProkinMinimapTrackingProxy')
+	trackingProxyButton:SetScript('OnClick', function(self)
+		if not _G.MiniMapTrackingDropDown then
+			return
+		end
+
+		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, self, 0, -5)
+		PlaySound('igMainMenuOptionCheckBoxOn')
+	end)
+	trackingProxyButton:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+		GameTooltip:SetText(TRACKING, 1, 1, 1)
+		GameTooltip:AddLine(MINIMAP_TRACKING_TOOLTIP_NONE, nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	trackingProxyButton:SetScript('OnLeave', GameTooltip_Hide)
+end
+
+local function EnsureLFGProxy()
+	if lfgProxyButton or not Minimap then
+		return
+	end
+
+	lfgProxyButton = CreateProxyButton('ProkinMinimapLFGProxy')
+	lfgProxyButton:SetScript('OnClick', function(self, button)
+		local lfg = GetLFGFrame()
+		local queueButton = _G.QueueStatusMinimapButton or _G.QueueStatusButton
+		if lfg and lfg.Click then
+			lfg:Click(button or 'LeftButton')
+			return
+		end
+
+		if queueButton and type(QueueStatusMinimapButton_OnClick) == 'function' then
+			QueueStatusMinimapButton_OnClick(queueButton, button or 'LeftButton')
+			return
+		end
+
+		if type(ToggleLFGParentFrame) == 'function' then
+			ToggleLFGParentFrame()
+			return
+		end
+
+		if type(ToggleLFDParentFrame) == 'function' then
+			ToggleLFDParentFrame()
+			return
+		end
+
+		if type(ToggleFriendsFrame) == 'function' then
+			ToggleFriendsFrame(4)
+		end
+	end)
+	lfgProxyButton:SetScript('OnEnter', function(self)
+		local queueButton = _G.QueueStatusMinimapButton or _G.QueueStatusButton
+		if queueButton and type(QueueStatusMinimapButton_OnEnter) == 'function' then
+			QueueStatusMinimapButton_OnEnter(queueButton)
+			return
+		end
+
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText(LOOKING_FOR_GROUP or DUNGEONS_BUTTON or 'Looking For Group', 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	lfgProxyButton:SetScript('OnLeave', function(self)
+		local queueButton = _G.QueueStatusMinimapButton or _G.QueueStatusButton
+		if queueButton and type(QueueStatusMinimapButton_OnLeave) == 'function' then
+			QueueStatusMinimapButton_OnLeave(queueButton)
+			return
+		end
+
+		GameTooltip_Hide(self)
+	end)
+end
+
+local function UpdateTrackingProxy()
+	EnsureTrackingProxy()
+	if not trackingProxyButton then
+		return
+	end
+
+	local texturePath = [[Interface\Minimap\Tracking\None]]
+	local left, right, top, bottom = 0, 1, 0, 1
+	local count = GetNumTrackingTypes and GetNumTrackingTypes() or 0
+
+	for id = 1, count do
+		local _, texture, active, category = GetTrackingInfo(id)
+		if active then
+			texturePath = texture or texturePath
+			if category == 'spell' then
+				left, right, top, bottom = 0.0625, 0.9, 0.0625, 0.9
+			end
+			break
+		end
+	end
+
+	trackingProxyButton.icon:SetTexture(texturePath)
+	trackingProxyButton.icon:SetTexCoord(left, right, top, bottom)
+end
+
+local function UpdateLFGProxy()
+	EnsureLFGProxy()
+	if not lfgProxyButton then
+		return
+	end
+
+	local texturePath = [[Interface\LFGFrame\LFG-Eye]]
+	local left, right, top, bottom = 0, 0.125, 0, 0.25
+	local lfg = GetLFGFrame()
+	local eye = lfg and lfg.Eye
+	local eyeTexture = eye and eye.texture
+
+	if eyeTexture and eyeTexture.GetTexture then
+		texturePath = eyeTexture:GetTexture() or texturePath
+		if eyeTexture.GetTexCoord then
+			left, right, top, bottom = eyeTexture:GetTexCoord()
+		end
+	end
+
+	lfgProxyButton.icon:SetTexture(texturePath)
+	lfgProxyButton.icon:SetTexCoord(left, right, top, bottom)
+end
+
 ApplyBlizzardWidgetLayout = function()
 	local tracking = GetTrackingFrame()
+	EnsureTrackingProxy()
+	UpdateTrackingProxy()
+	if trackingProxyButton then
+		trackingProxyButton:ClearAllPoints()
+		trackingProxyButton:SetPoint('TOPRIGHT', Minimap, 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		trackingProxyButton:Show()
+	end
+
 	if tracking then
 		PreserveWidgetMethods(tracking)
 		HookWidgetPosition(tracking)
-		AnchorWidget(tracking, 'TOPRIGHT', 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
-		HideTextureObject(_G.MiniMapTrackingButtonBorder)
-		HideTextureObject(_G.MiniMapTrackingBorder)
-		HideTextureObject(_G.MiniMapTrackingBackground)
-		if tracking.Show then
-			tracking:Show()
+		if tracking.SetAlpha then
+			tracking:SetAlpha(0)
+		end
+
+		if _G.MiniMapTracking and _G.MiniMapTracking.SetAlpha then
+			_G.MiniMapTracking:SetAlpha(0)
 		end
 	end
 
 	local lfg = GetLFGFrame()
+	EnsureLFGProxy()
+	UpdateLFGProxy()
+	if lfgProxyButton then
+		lfgProxyButton:ClearAllPoints()
+		lfgProxyButton:SetPoint('TOPLEFT', Minimap, 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		lfgProxyButton:Show()
+	end
+
 	if lfg then
 		PreserveWidgetMethods(lfg)
 		HookWidgetPosition(lfg)
-		AnchorWidget(lfg, 'TOPLEFT', 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
-		HideTextureObject(_G.MiniMapLFGFrameBorder or _G.MiniMapLFGBorder or _G.LFGMinimapFrameBorder)
-		if lfg.Show then
-			lfg:Show()
+		if lfg.SetAlpha then
+			lfg:SetAlpha(0)
 		end
 	end
 
@@ -580,7 +788,7 @@ ApplyBlizzardWidgetLayout = function()
 		PreserveWidgetMethods(battlefield)
 		HookWidgetPosition(battlefield)
 		AnchorWidget(battlefield, 'BOTTOMLEFT', 'BOTTOMRIGHT', WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
-		if battlefield.Show then
+		if battlefield.IsShown and battlefield:IsShown() and battlefield.Show then
 			battlefield:Show()
 		end
 	end

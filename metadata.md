@@ -27,7 +27,8 @@ Features:
 - Reapplies the square minimap on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
-- Keeps the Blizzard tracking button, LFG icon, clock, mail icon, and PvP or battleground indicator visible just outside the square minimap border
+- Adds always-visible Blizzard-style tracking and LFG proxy buttons just outside the square minimap border, while keeping the Blizzard clock and mail icon visible there as well
+- Keeps the Blizzard PvP or battleground indicator outside the square minimap border only when Blizzard would normally show it
 - Includes MinimapButtonButton compatibility so those Blizzard widgets are not pulled into its collected button tray
 - Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
 - Persistent square resizing with a default size of `400x400`
@@ -55,8 +56,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.11.zip`
-- **Display Name:** Prokin-Minimap v1.0.11
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.12.zip`
+- **Display Name:** Prokin-Minimap v1.0.12
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -73,6 +74,8 @@ Saved variable:
 - Added AutoMarkAssist minimap button compatibility so its icon is clamped to the square minimap edge
 - Restored the Blizzard tracking, LFG, clock, mail, and PvP or battleground widgets and anchored them outside the square minimap border
 - Added MinimapButtonButton compatibility so those Blizzard widgets stay outside the square minimap instead of being collected into its tray
+- Added always-visible Blizzard-style tracking and LFG proxy buttons outside the square minimap border
+- Restored Blizzard-native tracking dropdown behavior and conditional PvP indicator visibility while keeping LFG proxy access available
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support

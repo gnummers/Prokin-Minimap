@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.12
+- Added always-visible Blizzard-style tracking and LFG proxy buttons outside the square minimap border
+- Wired the tracking proxy to Blizzard's native tracking dropdown behavior and forwarded the LFG proxy to Blizzard queue handlers when available
+- Stopped force-showing the PvP or battleground indicator so it only appears when Blizzard would normally display it
+
 ## v1.0.11
 - Added MinimapButtonButton compatibility for the Blizzard tracking, LFG/queue, clock, mail, and PvP/battleground widgets
 - Preserves the original widget methods so Prokin-Minimap can still reparent and anchor those frames even after MinimapButtonButton overrides them
