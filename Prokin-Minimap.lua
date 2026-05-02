@@ -11,6 +11,7 @@ local ZONE_HEADER_SPACING = 4
 local BORDER_SIZE = 1
 local WIDGET_EDGE_PADDING = 0
 local WIDGET_BORDER_OVERLAP = 12
+local CLOCK_BOTTOM_OFFSET = -5
 local PROXY_BUTTON_SIZE = 33
 local PROXY_BACKGROUND_SIZE = 30
 local PROXY_ICON_SIZE = 24
@@ -37,6 +38,9 @@ local zoneHeaderFrame
 local zoneHeaderText
 local hiddenZoneHeaderParent
 local eventFrame
+local loadAnnouncementPending
+local loadAnnouncementShown
+local loadAnnouncementDelay = 0
 local zoneTimeElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
@@ -72,6 +76,39 @@ local function Noop() end
 
 local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format('|cff33ff99%s|r: %s', ADDON_NAME, message))
+end
+
+local function GetAddonVersion()
+	if type(C_AddOns) == 'table' and type(C_AddOns.GetAddOnMetadata) == 'function' then
+		return C_AddOns.GetAddOnMetadata(ADDON_NAME, 'Version') or 'unknown'
+	end
+
+	if type(GetAddOnMetadata) == 'function' then
+		return GetAddOnMetadata(ADDON_NAME, 'Version') or 'unknown'
+	end
+
+	return 'unknown'
+end
+
+local function TryShowLoadAnnouncement()
+	if loadAnnouncementShown or not loadAnnouncementPending or not DEFAULT_CHAT_FRAME then
+		return
+	end
+
+	if loadAnnouncementDelay > 0 then
+		return
+	end
+
+	if DEFAULT_CHAT_FRAME.IsShown and not DEFAULT_CHAT_FRAME:IsShown() then
+		return
+	end
+
+	loadAnnouncementPending = nil
+	loadAnnouncementShown = true
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		'|cffffff00Prokin Minimap v%s by |r|cff33ff99<I Pull Mob>|r|cffffff00 loaded. Please use /pkm for help.|r',
+		GetAddonVersion()
+	))
 end
 
 local function IsTrackingDebugEnabled()
@@ -673,7 +710,7 @@ local function SetWidgetPosition(widgetId, edge, coord)
 	}
 end
 
-local function GetWidgetAnchorOffsets(frame, edge, coord)
+local function GetWidgetAnchorOffsets(frame, widgetId, edge, coord)
 	local halfWidth = (Minimap:GetWidth() or DEFAULT_SIZE) * 0.5
 	local halfHeight = (Minimap:GetHeight() or DEFAULT_SIZE) * 0.5
 	local frameHalfWidth = ((frame.GetWidth and frame:GetWidth()) or 32) * 0.5
@@ -690,7 +727,12 @@ local function GetWidgetAnchorOffsets(frame, edge, coord)
 	elseif edge == 'right' then
 		return outsideX, coord * verticalRange
 	elseif edge == 'bottom' then
-		return coord * horizontalRange, -outsideY
+		local yOffset = -outsideY
+		if widgetId == 'clock' then
+			yOffset = yOffset + CLOCK_BOTTOM_OFFSET
+		end
+
+		return coord * horizontalRange, yOffset
 	end
 
 	return -outsideX, coord * verticalRange
@@ -734,7 +776,7 @@ local function AnchorProxy(frame, widgetId)
 	end
 
 	local edge, coord = GetWidgetPosition(widgetId)
-	local xOffset, yOffset = GetWidgetAnchorOffsets(frame, edge, coord)
+	local xOffset, yOffset = GetWidgetAnchorOffsets(frame, widgetId, edge, coord)
 	frame:ClearAllPoints()
 	frame:SetPoint('CENTER', Minimap, 'CENTER', xOffset, yOffset)
 end
@@ -802,7 +844,7 @@ local function AnchorStoredWidget(frame, widgetId)
 	PreserveWidgetMethods(frame)
 
 	local edge, coord = GetWidgetPosition(widgetId)
-	local xOffset, yOffset = GetWidgetAnchorOffsets(frame, edge, coord)
+	local xOffset, yOffset = GetWidgetAnchorOffsets(frame, widgetId, edge, coord)
 
 	adjustingWidgetLayout = true
 	CallWidgetMethod(frame, 'SetParent', Minimap)
@@ -1800,6 +1842,8 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 		if arg1 == ADDON_NAME then
 			GetDatabase()
 			InstallHooks()
+			loadAnnouncementPending = true
+			loadAnnouncementDelay = 0
 		elseif arg1 == HYBRID_MINIMAP_ADDON then
 			ApplyHybridMinimap()
 		elseif arg1 == MINIMAPBUTTONBUTTON_ADDON then
@@ -1816,10 +1860,19 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 		InstallHooks()
 	end
 
+	if event == 'PLAYER_LOGIN' or event == 'PLAYER_ENTERING_WORLD' then
+		loadAnnouncementDelay = 2
+	end
+
 	RefreshMinimap()
 end)
 eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	UpdateWidgetDrag()
+
+	if loadAnnouncementPending then
+		loadAnnouncementDelay = math.max((loadAnnouncementDelay or 0) - elapsed, 0)
+		TryShowLoadAnnouncement()
+	end
 
 	zoneTimeElapsed = zoneTimeElapsed + elapsed
 	if zoneTimeElapsed < 1 then

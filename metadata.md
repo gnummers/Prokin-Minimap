@@ -58,8 +58,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.20.zip`
-- **Display Name:** Prokin-Minimap v1.0.20
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.21.zip`
+- **Display Name:** Prokin-Minimap v1.0.21
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -96,6 +96,9 @@ Saved variable:
 - Fixed the Tracking proxy on TBC Anniversary's modern Blizzard minimap by opening the generated tracking menu directly on the proxy owner region
 - Preserved Tracking drag behavior while moving menu activation onto Blizzard's required mouse-down flow and handling the menu system's global mouse event correctly
 - Added an opt-in `/pkm trackingdebug` diagnostic toggle and changed tracking debug logging to default off for public builds
+- Lowered the Blizzard minimap clock by 5 pixels on the bottom edge so the square border no longer cuts through it
+- Added a delayed, colorized load announcement that stays visible after `/reload`
+- Fixed the load announcement to read the addon version correctly from the Anniversary metadata API and updated the message text formatting
 - Added 4 pixel zone header spacing to prevent overlap
 - Added a 1 pixel black border around the minimap
 - Added custom addon icon support

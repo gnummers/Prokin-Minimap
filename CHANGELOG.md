@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.21
+- Lowered the Blizzard minimap clock by 5 pixels on the bottom edge so the square border no longer cuts through it
+- Added a delayed, colorized load announcement that stays visible after `/reload`
+- Fixed the load announcement to read the addon version correctly from the Anniversary metadata API and updated the message text formatting
+
 ## v1.0.20
 - Fixed the Tracking proxy on TBC Anniversary's modern Blizzard minimap by opening the generated tracking menu directly on the proxy owner region
 - Preserved Tracking drag behavior while moving menu activation onto Blizzard's required mouse-down flow and handling the menu system's global mouse event correctly
