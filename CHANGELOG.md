@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.18
+- Increased the Blizzard widget border overlap so the minimap icons sit closer to the square border art
+- Switched the tracking proxy to Blizzard's exact TBC `MiniMapTracking` dropdown call for more reliable tracking-menu opening
+
 ## v1.0.17
 - Switched the Blizzard proxy buttons to mouse-up activation so the tracking proxy follows the TBC control flow more closely
 - Added explicit widget border overlap to eliminate the remaining visible gap between the square minimap border and Blizzard widgets

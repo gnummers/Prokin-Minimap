@@ -10,7 +10,7 @@ local DEFAULT_STEP = 25
 local ZONE_HEADER_SPACING = 4
 local BORDER_SIZE = 1
 local WIDGET_EDGE_PADDING = 0
-local WIDGET_BORDER_OVERLAP = 3
+local WIDGET_BORDER_OVERLAP = 8
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
@@ -938,6 +938,19 @@ local function OpenTrackingMenu(anchor)
 		if button.menu and button.menu.ClearAllPoints and button.menu.SetPoint then
 			button.menu:ClearAllPoints()
 			button.menu:SetPoint('TOPRIGHT', anchor, 'BOTTOMRIGHT', 0, -2)
+		end
+		return
+	end
+
+	if _G.MiniMapTrackingDropDown and _G.MiniMapTracking then
+		if GameTooltip.GetOwner and GameTooltip:GetOwner() == _G.MiniMapTracking then
+			GameTooltip:Hide()
+		end
+
+		ToggleDropDownMenu(1, nil, _G.MiniMapTrackingDropDown, 'MiniMapTracking', 0, -5)
+		ReanchorTrackingMenu(anchor)
+		if type(PlaySound) == 'function' then
+			PlaySound('igMainMenuOptionCheckBoxOn')
 		end
 		return
 	end
