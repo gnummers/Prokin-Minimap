@@ -29,6 +29,7 @@ local autoMarkAssistHookInstalled
 local adjustingWidgetLayout
 local trackingProxyButton
 local lfgProxyButton
+local battlefieldProxyButton
 local RefreshMinimap
 local ApplyBlizzardWidgetLayout
 local widgetMethods = setmetatable({}, { __mode = 'k' })
@@ -46,7 +47,8 @@ local WIDGET_BLACKLIST_NAMES = {
 	'MiniMapLFGFrame',
 	'LFGMinimapFrame',
 	'ProkinMinimapTrackingProxy',
-	'ProkinMinimapLFGProxy'
+	'ProkinMinimapLFGProxy',
+	'ProkinMinimapBattlefieldProxy'
 }
 
 local function Noop() end
@@ -475,6 +477,15 @@ local function GetBattlefieldFrame()
 	return _G.MiniMapBattlefieldFrame
 end
 
+local function AnchorProxy(frame, point, relativePoint, xOffset, yOffset)
+	if not frame or not Minimap then
+		return
+	end
+
+	frame:ClearAllPoints()
+	frame:SetPoint(point, Minimap, relativePoint, xOffset, yOffset)
+end
+
 local function PreserveWidgetMethods(frame)
 	if not frame or widgetMethods[frame] then
 		return
@@ -556,7 +567,7 @@ local function SetProxyButtonPressed(button, pressed)
 end
 
 local function CreateProxyButton(name)
-	local button = CreateFrame('Button', name, Minimap)
+	local button = CreateFrame('Button', name, _G.UIParent)
 	button:SetFrameStrata('MEDIUM')
 	button:SetFrameLevel(Minimap:GetFrameLevel() + 25)
 	button:SetSize(32, 32)
@@ -676,6 +687,107 @@ local function EnsureLFGProxy()
 	end)
 end
 
+local function GetBattlefieldStatusInfo()
+	local battlefield = GetBattlefieldFrame()
+	if type(BattlefieldFrame_UpdateStatus) == 'function' then
+		BattlefieldFrame_UpdateStatus(1)
+	end
+
+	if battlefield and battlefield.status and battlefield.status ~= 'none' then
+		return battlefield.status, battlefield.tooltip
+	end
+
+	local maxBattlefieldId = type(GetMaxBattlefieldID) == 'function' and GetMaxBattlefieldID() or 0
+	local bestStatus
+	local bestIndex
+	local bestMapName
+
+	for index = 1, maxBattlefieldId do
+		local status, mapName = GetBattlefieldStatus(index)
+		if status and status ~= 'none' then
+			if status == 'active' or
+				(status == 'confirm' and bestStatus ~= 'active') or
+				(status == 'queued' and not bestStatus) then
+				bestStatus = status
+				bestIndex = index
+				bestMapName = mapName
+			end
+		end
+	end
+
+	if not bestStatus then
+		return nil
+	end
+
+	local tooltip
+	if bestStatus == 'active' then
+		if bestMapName and BATTLEFIELD_IN_BATTLEFIELD then
+			tooltip = string.format(BATTLEFIELD_IN_BATTLEFIELD, bestMapName)
+		else
+			tooltip = bestMapName or BATTLEFIELDS
+		end
+	elseif bestStatus == 'confirm' then
+		local expiration = type(GetBattlefieldPortExpiration) == 'function' and GetBattlefieldPortExpiration(bestIndex) or 0
+		if bestMapName and BATTLEFIELD_QUEUE_CONFIRM then
+			tooltip = string.format(BATTLEFIELD_QUEUE_CONFIRM, bestMapName, SecondsToTime((expiration or 0) / 1000))
+		else
+			tooltip = bestMapName or BATTLEFIELD_ALERT
+		end
+	elseif bestStatus == 'queued' then
+		local waitTime = type(GetBattlefieldEstimatedWaitTime) == 'function' and GetBattlefieldEstimatedWaitTime(bestIndex) or 0
+		local timeInQueue = type(GetBattlefieldTimeWaited) == 'function' and GetBattlefieldTimeWaited(bestIndex) or 0
+		local waitText = QUEUE_TIME_UNAVAILABLE or UNKNOWN
+		if waitTime and waitTime > 0 then
+			if waitTime < 60000 then
+				waitText = LESS_THAN_ONE_MINUTE or waitText
+			else
+				waitText = SecondsToTime(waitTime / 1000, 1)
+			end
+		end
+
+		if bestMapName and BATTLEFIELD_IN_QUEUE then
+			tooltip = string.format(BATTLEFIELD_IN_QUEUE, bestMapName, waitText, SecondsToTime((timeInQueue or 0) / 1000))
+		else
+			tooltip = bestMapName or BATTLEFIELDS
+		end
+	end
+
+	return bestStatus, tooltip
+end
+
+local function EnsureBattlefieldProxy()
+	if battlefieldProxyButton or not Minimap then
+		return
+	end
+
+	battlefieldProxyButton = CreateProxyButton('ProkinMinimapBattlefieldProxy')
+	battlefieldProxyButton.icon:SetTexture([[Interface\BattlefieldFrame\UI-Battlefield-Icon]])
+	battlefieldProxyButton.icon:SetTexCoord(0, 1, 0, 1)
+	battlefieldProxyButton:SetScript('OnClick', function(self, button)
+		local status = GetBattlefieldStatusInfo()
+		GameTooltip_Hide()
+
+		if status == 'active' then
+			if button == 'RightButton' and _G.MiniMapBattlefieldDropDown then
+				ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, self, 0, -5)
+			elseif IsShiftKeyDown() and type(ToggleBattlefieldMinimap) == 'function' then
+				ToggleBattlefieldMinimap()
+			elseif type(ToggleWorldStateScoreFrame) == 'function' then
+				ToggleWorldStateScoreFrame()
+			end
+		elseif button == 'RightButton' and _G.MiniMapBattlefieldDropDown then
+			ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, self, 0, -5)
+		end
+	end)
+	battlefieldProxyButton:SetScript('OnEnter', function(self)
+		local _, tooltip = GetBattlefieldStatusInfo()
+		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+		GameTooltip:SetText(tooltip or (BATTLEFIELDS or PVP))
+		GameTooltip:Show()
+	end)
+	battlefieldProxyButton:SetScript('OnLeave', GameTooltip_Hide)
+end
+
 local function UpdateTrackingProxy()
 	EnsureTrackingProxy()
 	if not trackingProxyButton then
@@ -729,8 +841,7 @@ ApplyBlizzardWidgetLayout = function()
 	EnsureTrackingProxy()
 	UpdateTrackingProxy()
 	if trackingProxyButton then
-		trackingProxyButton:ClearAllPoints()
-		trackingProxyButton:SetPoint('TOPRIGHT', Minimap, 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		AnchorProxy(trackingProxyButton, 'TOPRIGHT', 'TOPLEFT', -WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
 		trackingProxyButton:Show()
 	end
 
@@ -750,8 +861,7 @@ ApplyBlizzardWidgetLayout = function()
 	EnsureLFGProxy()
 	UpdateLFGProxy()
 	if lfgProxyButton then
-		lfgProxyButton:ClearAllPoints()
-		lfgProxyButton:SetPoint('TOPLEFT', Minimap, 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
+		AnchorProxy(lfgProxyButton, 'TOPLEFT', 'TOPRIGHT', WIDGET_EDGE_PADDING, WIDGET_EDGE_PADDING)
 		lfgProxyButton:Show()
 	end
 
@@ -778,18 +888,30 @@ ApplyBlizzardWidgetLayout = function()
 		PreserveWidgetMethods(mail)
 		HookWidgetPosition(mail)
 		AnchorWidget(mail, 'BOTTOMRIGHT', 'BOTTOMLEFT', -WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
-		if mail.Show then
+		if HasNewMail and HasNewMail() then
 			mail:Show()
+		elseif mail.Hide then
+			mail:Hide()
 		end
 	end
 
 	local battlefield = GetBattlefieldFrame()
+	local battlefieldStatus = GetBattlefieldStatusInfo()
+	EnsureBattlefieldProxy()
+	if battlefieldProxyButton then
+		AnchorProxy(battlefieldProxyButton, 'BOTTOMLEFT', 'BOTTOMRIGHT', WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
+		if battlefieldStatus ~= nil then
+			battlefieldProxyButton:Show()
+		else
+			battlefieldProxyButton:Hide()
+		end
+	end
+
 	if battlefield then
 		PreserveWidgetMethods(battlefield)
 		HookWidgetPosition(battlefield)
-		AnchorWidget(battlefield, 'BOTTOMLEFT', 'BOTTOMRIGHT', WIDGET_EDGE_PADDING, -WIDGET_EDGE_PADDING)
-		if battlefield.IsShown and battlefield:IsShown() and battlefield.Show then
-			battlefield:Show()
+		if battlefield.SetAlpha then
+			battlefield:SetAlpha(0)
 		end
 	end
 end

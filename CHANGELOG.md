@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.13
+- Moved the tracking and LFG proxy buttons off the minimap itself so MinimapButtonButton no longer collects them into its tray
+- Added a conditional PvP or battleground proxy button that only shows while Blizzard battlefield state is active
+- Tightened the mail icon handling so it only shows when `HasNewMail()` reports unread mail
+
 ## v1.0.12
 - Added always-visible Blizzard-style tracking and LFG proxy buttons outside the square minimap border
 - Wired the tracking proxy to Blizzard's native tracking dropdown behavior and forwarded the LFG proxy to Blizzard queue handlers when available

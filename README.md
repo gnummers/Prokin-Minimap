@@ -9,8 +9,9 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Reapplies the square mask on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
-- Adds always-visible Blizzard-style tracking and LFG proxy buttons just outside the square minimap border, while keeping the Blizzard clock and mail icon visible there as well
-- Keeps the Blizzard PvP or battleground indicator outside the square minimap border only when Blizzard would normally show it
+- Adds always-visible Blizzard-style tracking and LFG proxy buttons just outside the square minimap border without letting MinimapButtonButton collect them into its tray
+- Keeps the Blizzard mail icon visible only while unread mail is waiting
+- Keeps a PvP or battleground proxy button outside the square minimap border only when Blizzard battlefield state is active
 - Includes MinimapButtonButton compatibility so those Blizzard widgets are not pulled into its collected button tray
 - Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
 - Saved minimap size with a default of **400x400**
