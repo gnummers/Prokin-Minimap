@@ -45,6 +45,7 @@ local zoneTimeElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
 local adjustingWidgetLayout
+local minimapRefreshPending
 local trackingProxyButton
 local lfgProxyButton
 local battlefieldProxyButton
@@ -1683,6 +1684,12 @@ local function InstallAutoMarkAssistCompatibility()
 end
 
 RefreshMinimap = function()
+	if type(InCombatLockdown) == 'function' and InCombatLockdown() then
+		minimapRefreshPending = true
+		return
+	end
+
+	minimapRefreshPending = nil
 	_G.GetMinimapShape = GetSquareMinimapShape
 	EnsureMinimapButtonButtonBlacklist()
 	ApplySquareMinimap()
@@ -1837,6 +1844,7 @@ eventFrame = CreateFrame('Frame')
 eventFrame:RegisterEvent('ADDON_LOADED')
 eventFrame:RegisterEvent('PLAYER_LOGIN')
 eventFrame:RegisterEvent('PLAYER_ENTERING_WORLD')
+eventFrame:RegisterEvent('PLAYER_REGEN_ENABLED')
 eventFrame:SetScript('OnEvent', function(_, event, arg1)
 	if event == 'ADDON_LOADED' then
 		if arg1 == ADDON_NAME then
@@ -1858,6 +1866,11 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 		end
 	elseif event == 'PLAYER_LOGIN' then
 		InstallHooks()
+	elseif event == 'PLAYER_REGEN_ENABLED' then
+		if minimapRefreshPending then
+			RefreshMinimap()
+		end
+		return
 	end
 
 	if event == 'PLAYER_LOGIN' or event == 'PLAYER_ENTERING_WORLD' then

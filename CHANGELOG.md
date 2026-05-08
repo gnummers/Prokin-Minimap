@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.22
+- Deferred minimap refresh work that resizes the minimap while combat lockdown is active
+- Reapplies the pending square minimap layout automatically after combat ends to avoid `ADDON_ACTION_BLOCKED`
+
 ## v1.0.21
 - Lowered the Blizzard minimap clock by 5 pixels on the bottom edge so the square border no longer cuts through it
 - Added a delayed, colorized load announcement that stays visible after `/reload`

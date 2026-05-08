@@ -58,13 +58,15 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.21.zip`
-- **Display Name:** Prokin-Minimap v1.0.21
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.22.zip`
+- **Display Name:** Prokin-Minimap v1.0.22
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
 ## Changelog
 
+- Deferred minimap refresh work that resizes the minimap while combat lockdown is active
+- Reapplies the pending square minimap layout automatically after combat ends to avoid `ADDON_ACTION_BLOCKED`
 - Initial CurseForge release
 - Added ElvUI-style square minimap behavior for TBC Anniversary
 - Added persistent minimap resizing with a default size of 400x400
