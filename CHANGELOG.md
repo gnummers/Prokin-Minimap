@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.24
+- Fixed the battleground or PvP proxy button so queue actions like `Leave Queue` stay on Blizzard's secure battlefield button path
+- Reanchored the hidden Blizzard battlefield button to the saved proxy position so its native queue menu opens from the same place without tainting `AcceptBattlefieldPort()`
+
 ## v1.0.23
 - Fixed the battleground or PvP proxy button so both left-click and right-click open Blizzard's queue menu while queued or ready to enter
 - Preserved the active battleground button behavior so left-click still opens the scoreframe and right-click still opens the leave menu

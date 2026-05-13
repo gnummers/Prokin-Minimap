@@ -1473,14 +1473,20 @@ local function GetBattlefieldStatusInfo()
 	return bestStatus, tooltip
 end
 
-local function OpenBattlefieldMenu(anchor)
-	if type(MiniMapBattlefieldFrame_ShowContextMenu) == 'function' then
-		MiniMapBattlefieldFrame_ShowContextMenu(anchor or GetBattlefieldFrame())
+local function ClickBattlefieldFrame(mouseButton)
+	local battlefield = GetBattlefieldFrame()
+	if not battlefield then
+		return false
+	end
+
+	if battlefield.Click then
+		battlefield:Click(mouseButton or 'LeftButton')
 		return true
 	end
 
-	if _G.MiniMapBattlefieldDropDown then
-		ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, anchor or GetBattlefieldFrame(), 0, -5)
+	local onClick = battlefield.GetScript and battlefield:GetScript('OnClick')
+	if onClick then
+		onClick(battlefield, mouseButton or 'LeftButton')
 		return true
 	end
 
@@ -1501,7 +1507,9 @@ local function EnsureBattlefieldProxy()
 
 		if status == 'active' then
 			if button == 'RightButton' then
-				OpenBattlefieldMenu(self)
+				ClickBattlefieldFrame('RightButton')
+			elseif button == 'LeftButton' and ClickBattlefieldFrame('LeftButton') then
+				return
 			elseif IsShiftKeyDown() and type(ToggleBattlefieldMinimap) == 'function' then
 				ToggleBattlefieldMinimap()
 			elseif type(ToggleWorldStateScoreFrame) == 'function' then
@@ -1509,7 +1517,7 @@ local function EnsureBattlefieldProxy()
 			end
 		elseif status == 'queued' or status == 'confirm' then
 			if button == 'LeftButton' or button == 'RightButton' then
-				OpenBattlefieldMenu(self)
+				ClickBattlefieldFrame('RightButton')
 			end
 		end
 	end
@@ -1647,6 +1655,7 @@ ApplyBlizzardWidgetLayout = function()
 	if battlefield then
 		PreserveWidgetMethods(battlefield)
 		HookWidgetPosition(battlefield)
+		AnchorStoredWidget(battlefield, 'battlefield')
 		if battlefield.SetAlpha then
 			battlefield:SetAlpha(0)
 		end
