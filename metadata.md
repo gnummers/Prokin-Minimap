@@ -58,13 +58,15 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.24.zip`
-- **Display Name:** Prokin-Minimap v1.0.24
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.25.zip`
+- **Display Name:** Prokin-Minimap v1.0.25
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
 ## Changelog
 
+- Replaced the battleground proxy click path with Blizzard's native battlefield button so protected queue actions and the battleground confirmation dialog keep working
+- Stopped hiding the Blizzard battlefield button so its dismiss and queue controls stay visible when the battleground countdown prompt appears
 - Fixed the battleground or PvP proxy button so queue actions like `Leave Queue` stay on Blizzard's secure battlefield button path
 - Reanchored the hidden Blizzard battlefield button to the saved proxy position so its native queue menu opens from the same place without tainting `AcceptBattlefieldPort()`
 - Fixed the battleground or PvP proxy button so both left-click and right-click open Blizzard's queue menu while queued or ready to enter

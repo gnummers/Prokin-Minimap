@@ -1642,14 +1642,8 @@ ApplyBlizzardWidgetLayout = function()
 
 	local battlefield = GetBattlefieldFrame()
 	local battlefieldStatus = GetBattlefieldStatusInfo()
-	EnsureBattlefieldProxy()
 	if battlefieldProxyButton then
-		AnchorProxy(battlefieldProxyButton, 'battlefield')
-		if battlefieldStatus ~= nil then
-			battlefieldProxyButton:Show()
-		else
-			battlefieldProxyButton:Hide()
-		end
+		battlefieldProxyButton:Hide()
 	end
 
 	if battlefield then
@@ -1657,7 +1651,15 @@ ApplyBlizzardWidgetLayout = function()
 		HookWidgetPosition(battlefield)
 		AnchorStoredWidget(battlefield, 'battlefield')
 		if battlefield.SetAlpha then
-			battlefield:SetAlpha(0)
+			battlefield:SetAlpha(1)
+		end
+
+		if battlefieldStatus ~= nil then
+			if battlefield.Show then
+				battlefield:Show()
+			end
+		elseif battlefield.Hide then
+			battlefield:Hide()
 		end
 	end
 end

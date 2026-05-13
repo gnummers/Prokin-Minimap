@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.25
+- Replaced the battleground proxy click path with Blizzard's native battlefield button so protected queue actions and the battleground confirmation dialog keep working
+- Stopped hiding the Blizzard battlefield button so its dismiss and queue controls stay visible when the battleground countdown prompt appears
+
 ## v1.0.24
 - Fixed the battleground or PvP proxy button so queue actions like `Leave Queue` stay on Blizzard's secure battlefield button path
 - Reanchored the hidden Blizzard battlefield button to the saved proxy position so its native queue menu opens from the same place without tainting `AcceptBattlefieldPort()`
