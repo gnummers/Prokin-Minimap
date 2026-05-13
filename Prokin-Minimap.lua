@@ -1473,6 +1473,20 @@ local function GetBattlefieldStatusInfo()
 	return bestStatus, tooltip
 end
 
+local function OpenBattlefieldMenu(anchor)
+	if type(MiniMapBattlefieldFrame_ShowContextMenu) == 'function' then
+		MiniMapBattlefieldFrame_ShowContextMenu(anchor or GetBattlefieldFrame())
+		return true
+	end
+
+	if _G.MiniMapBattlefieldDropDown then
+		ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, anchor or GetBattlefieldFrame(), 0, -5)
+		return true
+	end
+
+	return false
+end
+
 local function EnsureBattlefieldProxy()
 	if battlefieldProxyButton or not Minimap then
 		return
@@ -1486,15 +1500,17 @@ local function EnsureBattlefieldProxy()
 		GameTooltip_Hide()
 
 		if status == 'active' then
-			if button == 'RightButton' and _G.MiniMapBattlefieldDropDown then
-				ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, self, 0, -5)
+			if button == 'RightButton' then
+				OpenBattlefieldMenu(self)
 			elseif IsShiftKeyDown() and type(ToggleBattlefieldMinimap) == 'function' then
 				ToggleBattlefieldMinimap()
 			elseif type(ToggleWorldStateScoreFrame) == 'function' then
 				ToggleWorldStateScoreFrame()
 			end
-		elseif button == 'RightButton' and _G.MiniMapBattlefieldDropDown then
-			ToggleDropDownMenu(1, nil, _G.MiniMapBattlefieldDropDown, self, 0, -5)
+		elseif status == 'queued' or status == 'confirm' then
+			if button == 'LeftButton' or button == 'RightButton' then
+				OpenBattlefieldMenu(self)
+			end
 		end
 	end
 	battlefieldProxyButton:SetScript('OnEnter', function(self)

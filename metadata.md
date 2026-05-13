@@ -58,13 +58,15 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.22.zip`
-- **Display Name:** Prokin-Minimap v1.0.22
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.23.zip`
+- **Display Name:** Prokin-Minimap v1.0.23
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
 ## Changelog
 
+- Fixed the battleground or PvP proxy button so both left-click and right-click open Blizzard's queue menu while queued or ready to enter
+- Preserved the active battleground button behavior so left-click still opens the scoreframe and right-click still opens the leave menu
 - Deferred minimap refresh work that resizes the minimap while combat lockdown is active
 - Reapplies the pending square minimap layout automatically after combat ends to avoid `ADDON_ACTION_BLOCKED`
 - Initial CurseForge release
