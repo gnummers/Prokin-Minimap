@@ -9,6 +9,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Reapplies the square mask on world entry, minimap show, and Blizzard hybrid minimap load
 - Minimap zoom in and out with the mouse wheel
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
+- Adds a draggable Prokin minimap button bordering the minimap with left-click role check, right-click options, and a hover tooltip that lists the current party or raid roles
 - Adds always-visible Blizzard-style tracking and LFG proxy buttons just outside the square minimap border without letting MinimapButtonButton collect them into its tray
 - Keeps the Blizzard mail icon visible only while unread mail is waiting
 - Keeps the Blizzard PvP or battleground button outside the square minimap border only when battlefield state is active, while preserving Blizzard's native secure queue interactions
@@ -38,10 +39,13 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - `/pkm smaller` - decrease size by 25
 - `/pkm smaller 50` - decrease size by a custom step
 - `/pkm reset` - restore the default `400x400` size
+- `/pkm options` - open the Prokin Minimap options window
 
 The custom zone label uses the server clock and appends the current time in the format `[HH:MM AM/PM]`.
 
 Left-drag the visible Blizzard minimap widgets to reorganize them around the square border. Their positions are saved in `ProkinMinimapDB`, the tracking proxy still opens Blizzard's tracking menu when clicked, and the battleground queue button now uses Blizzard's native button directly so queue actions stay protected.
+
+The Prokin minimap button starts a role check on left-click, opens the options window on right-click, and can be repositioned with Alt + Left Drag. Its tooltip shows each party or raid member's assigned role.
 
 ## Saved Variables
 

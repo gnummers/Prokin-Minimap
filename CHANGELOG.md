@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.26
+- Added a Prokin minimap button with left-click role checks, right-click options access, tooltip role display, and saved edge positioning
+- Added an in-game options window for minimap size, addon button visibility, server-time display, minimap border visibility, and load-announcement toggles
+- Restyled and resized the options UI, slider, and Prokin minimap button to better match the surrounding addon buttons and keep all option text within the window border
+- Changed raid role display from per-player lines to summarized Tank, Healers, and DPS counts in the tooltip and raid role-check output
+
 ## v1.0.25
 - Replaced the battleground proxy click path with Blizzard's native battlefield button so protected queue actions and the battleground confirmation dialog keep working
 - Stopped hiding the Blizzard battlefield button so its dismiss and queue controls stay visible when the battleground countdown prompt appears

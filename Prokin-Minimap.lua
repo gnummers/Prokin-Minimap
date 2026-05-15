@@ -12,12 +12,23 @@ local BORDER_SIZE = 1
 local WIDGET_EDGE_PADDING = 0
 local WIDGET_BORDER_OVERLAP = 12
 local CLOCK_BOTTOM_OFFSET = -5
+local ADDON_BUTTON_DEFAULT_ANGLE = 180
 local PROXY_BUTTON_SIZE = 33
 local PROXY_BACKGROUND_SIZE = 30
 local PROXY_ICON_SIZE = 24
 local PROXY_BORDER_SIZE = 64
 local PROXY_ICON_OFFSET_X = 2
 local PROXY_ICON_OFFSET_Y = -2
+local ADDON_MINIMAP_BUTTON_SIZE = 31
+local ADDON_MINIMAP_BACKGROUND_SIZE = 27
+local ADDON_MINIMAP_ICON_SIZE = 20
+local ADDON_MINIMAP_BORDER_SIZE = 53
+local ADDON_MINIMAP_ICON_OFFSET_X = 0
+local ADDON_MINIMAP_ICON_OFFSET_Y = 0
+local ADDON_MINIMAP_EDGE_OFFSET = 7
+local ADDON_MINIMAP_ANCHOR_OFFSET_X = 3
+local ADDON_MINIMAP_ANCHOR_OFFSET_Y = 0
+local ADDON_BUTTON_NAME = 'ProkinMinimapButton'
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
@@ -46,6 +57,9 @@ local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
 local adjustingWidgetLayout
 local minimapRefreshPending
+local addonMinimapButton
+local addonButtonDragging
+local optionsFrame
 local trackingProxyButton
 local lfgProxyButton
 local battlefieldProxyButton
@@ -53,6 +67,8 @@ local activeWidgetDrag
 local pendingTrackingMenuAnchor
 local GetDatabase
 local RefreshMinimap
+local SetMinimapSize
+local OpenOptionsWindow
 local ApplyBlizzardWidgetLayout
 local widgetMethods = setmetatable({}, { __mode = 'k' })
 local WIDGET_BLACKLIST_NAMES = {
@@ -68,6 +84,7 @@ local WIDGET_BLACKLIST_NAMES = {
 	'QueueStatusButton',
 	'MiniMapLFGFrame',
 	'LFGMinimapFrame',
+	ADDON_BUTTON_NAME,
 	'ProkinMinimapTrackingProxy',
 	'ProkinMinimapLFGProxy',
 	'ProkinMinimapBattlefieldProxy'
@@ -77,6 +94,10 @@ local function Noop() end
 
 local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format('|cff33ff99%s|r: %s', ADDON_NAME, message))
+end
+
+local function ShouldShowLoadAnnouncement()
+	return GetDatabase().showLoadAnnouncement ~= false
 end
 
 local function GetAddonVersion()
@@ -93,6 +114,11 @@ end
 
 local function TryShowLoadAnnouncement()
 	if loadAnnouncementShown or not loadAnnouncementPending or not DEFAULT_CHAT_FRAME then
+		return
+	end
+
+	if not ShouldShowLoadAnnouncement() then
+		loadAnnouncementPending = nil
 		return
 	end
 
@@ -214,6 +240,16 @@ local function NormalizeStep(step)
 	return math.max(step, 1)
 end
 
+local function NormalizeAngle(angle)
+	angle = tonumber(angle) or ADDON_BUTTON_DEFAULT_ANGLE
+	angle = angle % 360
+	if angle < 0 then
+		angle = angle + 360
+	end
+
+	return angle
+end
+
 GetDatabase = function()
 	if type(ProkinMinimapDB) ~= 'table' then
 		ProkinMinimapDB = {}
@@ -226,6 +262,22 @@ GetDatabase = function()
 	if type(ProkinMinimapDB.debugTrackingConfigured) ~= 'boolean' then
 		ProkinMinimapDB.debugTracking = false
 		ProkinMinimapDB.debugTrackingConfigured = false
+	end
+	if type(ProkinMinimapDB.minimapButtonAngle) ~= 'number' then
+		ProkinMinimapDB.minimapButtonAngle = ADDON_BUTTON_DEFAULT_ANGLE
+	end
+	ProkinMinimapDB.minimapButtonAngle = NormalizeAngle(ProkinMinimapDB.minimapButtonAngle)
+	if type(ProkinMinimapDB.showAddonButton) ~= 'boolean' then
+		ProkinMinimapDB.showAddonButton = true
+	end
+	if type(ProkinMinimapDB.showLoadAnnouncement) ~= 'boolean' then
+		ProkinMinimapDB.showLoadAnnouncement = true
+	end
+	if type(ProkinMinimapDB.showServerTime) ~= 'boolean' then
+		ProkinMinimapDB.showServerTime = true
+	end
+	if type(ProkinMinimapDB.showMinimapBorder) ~= 'boolean' then
+		ProkinMinimapDB.showMinimapBorder = true
 	end
 	return ProkinMinimapDB
 end
@@ -281,6 +333,14 @@ local function EnsureMinimapBorder()
 	minimapBorder.right:SetPoint('TOPRIGHT', Minimap, 'TOPRIGHT', BORDER_SIZE, BORDER_SIZE)
 	minimapBorder.right:SetPoint('BOTTOMRIGHT', Minimap, 'BOTTOMRIGHT', BORDER_SIZE, -BORDER_SIZE)
 	minimapBorder.right:SetWidth(BORDER_SIZE)
+end
+
+local function ApplyMinimapBorderVisibility()
+	if not minimapBorder then
+		return
+	end
+
+	minimapBorder:SetShown(GetDatabase().showMinimapBorder ~= false)
 end
 
 local function EnsureCustomZoneHeader()
@@ -341,7 +401,7 @@ local function GetZoneHeaderText()
 		return ''
 	end
 
-	local timeSuffix = GetServerTimeSuffix()
+	local timeSuffix = GetDatabase().showServerTime ~= false and GetServerTimeSuffix() or ''
 	if timeSuffix ~= '' then
 		return string.format('%s %s', zoneText, timeSuffix)
 	end
@@ -658,6 +718,164 @@ end
 
 local function GetBattlefieldFrame()
 	return _G.MiniMapBattlefieldFrame
+end
+
+local function GetAssignedRole(unit)
+	local role = type(UnitGroupRolesAssigned) == 'function' and UnitGroupRolesAssigned(unit) or nil
+	if role == nil or role == '' then
+		role = 'NONE'
+	end
+
+	if role == 'NONE' and type(GetPartyAssignment) == 'function' and GetPartyAssignment('MAINTANK', unit, true) then
+		return 'TANK'
+	end
+
+	return role
+end
+
+local function GetRoleLabel(role)
+	if role == 'TANK' then
+		return TANK or 'Tank'
+	elseif role == 'HEALER' then
+		return HEALER or 'Healer'
+	elseif role == 'DAMAGER' then
+		return 'DPS'
+	end
+
+	return 'None'
+end
+
+local function GetRoleColor(role)
+	if role == 'TANK' then
+		return 0.3, 0.6, 1
+	elseif role == 'HEALER' then
+		return 0.2, 0.85, 0.3
+	elseif role == 'DAMAGER' then
+		return 1, 0.35, 0.35
+	end
+
+	return 0.7, 0.7, 0.7
+end
+
+local function GetUnitDisplayName(unit)
+	if type(GetUnitName) == 'function' then
+		return GetUnitName(unit, true) or UNKNOWN
+	end
+
+	local name = UnitName(unit)
+	return name or UNKNOWN
+end
+
+local function AddRoleTooltipLine(tooltip, unit)
+	if not tooltip or not unit or not UnitExists(unit) then
+		return
+	end
+
+	local name = GetUnitDisplayName(unit)
+	local classToken = select(2, UnitClass(unit))
+	local classColor = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[classToken]) or RAID_CLASS_COLORS[classToken] or NORMAL_FONT_COLOR
+	local role = GetAssignedRole(unit)
+	local roleR, roleG, roleB = GetRoleColor(role)
+	tooltip:AddDoubleLine(name, GetRoleLabel(role), classColor.r or 1, classColor.g or 1, classColor.b or 1, roleR, roleG, roleB)
+end
+
+local function GetGroupRoleCounts()
+	local counts = {
+		TANK = 0,
+		HEALER = 0,
+		DAMAGER = 0,
+		NONE = 0
+	}
+
+	local function CountUnit(unit)
+		if not unit or not UnitExists(unit) then
+			return
+		end
+
+		local role = GetAssignedRole(unit)
+		if counts[role] == nil then
+			role = 'NONE'
+		end
+
+		counts[role] = counts[role] + 1
+	end
+
+	if not IsInGroup() then
+		return counts
+	end
+
+	if IsInRaid() then
+		local total = type(GetNumGroupMembers) == 'function' and GetNumGroupMembers() or 0
+		for index = 1, total do
+			CountUnit('raid' .. index)
+		end
+		return counts
+	end
+
+	CountUnit('player')
+	local partyMembers = type(GetNumSubgroupMembers) == 'function' and GetNumSubgroupMembers() or math.max((GetNumGroupMembers() or 1) - 1, 0)
+	for index = 1, partyMembers do
+		CountUnit('party' .. index)
+	end
+
+	return counts
+end
+
+local function PrintRaidRoleSummary()
+	local counts = GetGroupRoleCounts()
+	Print(string.format('Tank: %d', counts.TANK or 0))
+	Print(string.format('Healers: %d', counts.HEALER or 0))
+	Print(string.format('DPS: %d', counts.DAMAGER or 0))
+end
+
+local function AddGroupRoleTooltipLines(tooltip)
+	if not tooltip then
+		return
+	end
+
+	tooltip:AddLine(' ')
+	tooltip:AddLine('Group Roles', 1, 0.82, 0)
+
+	if not IsInGroup() then
+		tooltip:AddLine('Not in a party or raid.', 0.7, 0.7, 0.7)
+		return
+	end
+
+	if IsInRaid() then
+		local counts = GetGroupRoleCounts()
+		tooltip:AddDoubleLine('Tank', tostring(counts.TANK or 0), 0.85, 0.85, 0.85, GetRoleColor('TANK'))
+		tooltip:AddDoubleLine('Healers', tostring(counts.HEALER or 0), 0.85, 0.85, 0.85, GetRoleColor('HEALER'))
+		tooltip:AddDoubleLine('DPS', tostring(counts.DAMAGER or 0), 0.85, 0.85, 0.85, GetRoleColor('DAMAGER'))
+		return
+	end
+
+	AddRoleTooltipLine(tooltip, 'player')
+	local partyMembers = type(GetNumSubgroupMembers) == 'function' and GetNumSubgroupMembers() or math.max((GetNumGroupMembers() or 1) - 1, 0)
+	for index = 1, partyMembers do
+		AddRoleTooltipLine(tooltip, 'party' .. index)
+	end
+end
+
+local function TriggerRoleCheck()
+	if type(InitiateRolePoll) ~= 'function' then
+		Print('Role checks are unavailable on this client.')
+		return
+	end
+
+	if not IsInGroup() or (type(GetNumGroupMembers) == 'function' and GetNumGroupMembers() < 2 and not IsInRaid()) then
+		Print('Role check requires a party or raid.')
+		return
+	end
+
+	local result = InitiateRolePoll()
+	if result == false then
+		Print('Unable to start a role check right now.')
+		return
+	end
+
+	if IsInRaid() then
+		PrintRaidRoleSummary()
+	end
 end
 
 local function ClampWidgetCoord(coord)
@@ -1664,7 +1882,7 @@ ApplyBlizzardWidgetLayout = function()
 	end
 end
 
-local function PositionButtonOnSquareEdge(button, angle)
+local function PositionButtonOnSquareEdge(button, angle, edgeOffset, xOffset, yOffset)
 	if not Minimap or not button then
 		return
 	end
@@ -1680,9 +1898,180 @@ local function PositionButtonOnSquareEdge(button, angle)
 	local divisor = math.max(math.abs(xUnit), math.abs(yUnit), 0.0001)
 	local halfWidth = (Minimap:GetWidth() or DEFAULT_SIZE) * 0.5
 	local halfHeight = (Minimap:GetHeight() or DEFAULT_SIZE) * 0.5
+	edgeOffset = tonumber(edgeOffset) or 0
+	xOffset = tonumber(xOffset) or 0
+	yOffset = tonumber(yOffset) or 0
 
 	button:ClearAllPoints()
-	button:SetPoint('CENTER', Minimap, 'CENTER', (xUnit / divisor) * halfWidth, (yUnit / divisor) * halfHeight)
+	button:SetPoint(
+		'CENTER',
+		Minimap,
+		'CENTER',
+		((xUnit / divisor) * (halfWidth + edgeOffset)) + xOffset,
+		((yUnit / divisor) * (halfHeight + edgeOffset)) + yOffset
+	)
+end
+
+local function GetAddonButtonAngle()
+	return GetDatabase().minimapButtonAngle or ADDON_BUTTON_DEFAULT_ANGLE
+end
+
+local function SetAddonButtonAngle(angle)
+	GetDatabase().minimapButtonAngle = NormalizeAngle(angle)
+end
+
+local function UpdateAddonButtonAngleFromCursor()
+	if not Minimap then
+		return
+	end
+
+	local scale = Minimap:GetEffectiveScale() or 1
+	local cursorX, cursorY = GetCursorPosition()
+	local centerX, centerY = Minimap:GetCenter()
+	if not centerX or not centerY then
+		return
+	end
+
+	local relativeX = (cursorX / scale) - centerX
+	local relativeY = (cursorY / scale) - centerY
+	if relativeX == 0 and relativeY == 0 then
+		return
+	end
+
+	SetAddonButtonAngle(math.deg(math.atan2(relativeY, relativeX)))
+end
+
+local function AnchorAddonMinimapButton()
+	if not addonMinimapButton then
+		return
+	end
+
+	PositionButtonOnSquareEdge(
+		addonMinimapButton,
+		GetAddonButtonAngle(),
+		ADDON_MINIMAP_EDGE_OFFSET,
+		ADDON_MINIMAP_ANCHOR_OFFSET_X,
+		ADDON_MINIMAP_ANCHOR_OFFSET_Y
+	)
+end
+
+local function StopAddonButtonDrag(button)
+	if addonButtonDragging ~= button then
+		return false
+	end
+
+	UpdateAddonButtonAngleFromCursor()
+	AnchorAddonMinimapButton()
+	addonButtonDragging = nil
+	button.__ProkinSuppressClick = true
+	return true
+end
+
+local function UpdateAddonButtonDrag()
+	if addonButtonDragging ~= addonMinimapButton then
+		return
+	end
+
+	UpdateAddonButtonAngleFromCursor()
+	AnchorAddonMinimapButton()
+end
+
+local function UpdateAddonButtonVisibility()
+	if not addonMinimapButton then
+		return
+	end
+
+	if GetDatabase().showAddonButton == false then
+		addonMinimapButton:Hide()
+		return
+	end
+
+	AnchorAddonMinimapButton()
+	addonMinimapButton:Show()
+end
+
+local function EnsureAddonMinimapButton()
+	if addonMinimapButton or not Minimap then
+		return
+	end
+
+	local button = CreateFrame('Button', ADDON_BUTTON_NAME, _G.UIParent)
+	button:SetSize(ADDON_MINIMAP_BUTTON_SIZE, ADDON_MINIMAP_BUTTON_SIZE)
+	button:SetFrameStrata('MEDIUM')
+	button:SetFrameLevel(Minimap:GetFrameLevel() + 30)
+	button:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
+	button:RegisterForDrag('LeftButton')
+
+	button.background = button:CreateTexture(nil, 'BACKGROUND')
+	button.background:SetTexture([[Interface\Minimap\UI-Minimap-Background]])
+	button.background:SetSize(ADDON_MINIMAP_BACKGROUND_SIZE, ADDON_MINIMAP_BACKGROUND_SIZE)
+	button.background:SetPoint('CENTER', button, 'CENTER', 0, 0)
+	button.background:SetVertexColor(1, 1, 1, 0.75)
+
+	button.icon = button:CreateTexture(nil, 'ARTWORK')
+	button.icon:SetTexture([[Interface\AddOns\Prokin-Minimap\Media\ProkinFaceIcon.png]])
+	button.icon:SetSize(ADDON_MINIMAP_ICON_SIZE, ADDON_MINIMAP_ICON_SIZE)
+	button.icon:SetPoint('CENTER', button, 'CENTER', ADDON_MINIMAP_ICON_OFFSET_X, ADDON_MINIMAP_ICON_OFFSET_Y)
+
+	button.overlay = button:CreateTexture(nil, 'OVERLAY')
+	button.overlay:SetAllPoints(button.icon)
+	button.overlay:SetColorTexture(0, 0, 0, 0.5)
+	button.overlay:Hide()
+
+	button.border = button:CreateTexture(nil, 'BORDER')
+	button.border:SetTexture([[Interface\Minimap\MiniMap-TrackingBorder]])
+	button.border:SetSize(ADDON_MINIMAP_BORDER_SIZE, ADDON_MINIMAP_BORDER_SIZE)
+	button.border:SetPoint('TOPLEFT', button, 'TOPLEFT', 0, 0)
+
+	button:SetHighlightTexture([[Interface\Minimap\UI-Minimap-ZoomButton-Highlight]], 'ADD')
+	local highlight = button:GetHighlightTexture()
+	if highlight then
+		highlight:SetAllPoints(button)
+	end
+
+	button:SetScript('OnMouseDown', function(self)
+		SetProxyButtonPressed(self, true)
+	end)
+	button:SetScript('OnMouseUp', function(self)
+		SetProxyButtonPressed(self, false)
+	end)
+	button:SetScript('OnClick', function(self, mouseButton)
+		if self.__ProkinSuppressClick then
+			self.__ProkinSuppressClick = nil
+			return
+		end
+
+		if mouseButton == 'LeftButton' then
+			TriggerRoleCheck()
+		elseif mouseButton == 'RightButton' then
+			OpenOptionsWindow()
+		end
+	end)
+	button:SetScript('OnDragStart', function(self)
+		if not IsAltKeyDown() then
+			return
+		end
+
+		addonButtonDragging = self
+		GameTooltip_Hide()
+	end)
+	button:SetScript('OnDragStop', StopAddonButtonDrag)
+	button:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+		GameTooltip:AddLine('Prokin Minimap', 1, 1, 1)
+		GameTooltip:AddLine('Left-Click: Start a role check', 0.85, 0.85, 0.85)
+		GameTooltip:AddLine('Right-Click: Open options', 0.85, 0.85, 0.85)
+		GameTooltip:AddLine('Alt-Left-Drag: Move button', 0.85, 0.85, 0.85)
+		AddGroupRoleTooltipLines(GameTooltip)
+		GameTooltip:Show()
+	end)
+	button:SetScript('OnLeave', GameTooltip_Hide)
+	button.HandlesGlobalMouseEvent = function(_, buttonName, event)
+		return event == 'GLOBAL_MOUSE_DOWN' and (buttonName == 'LeftButton' or buttonName == 'RightButton')
+	end
+
+	addonMinimapButton = button
+	UpdateAddonButtonVisibility()
 end
 
 local function ApplyAutoMarkAssistCompatibility()
@@ -1721,6 +2110,9 @@ RefreshMinimap = function()
 	EnsureMinimapButtonButtonBlacklist()
 	ApplySquareMinimap()
 	EnsureMinimapBorder()
+	ApplyMinimapBorderVisibility()
+	EnsureAddonMinimapButton()
+	UpdateAddonButtonVisibility()
 	ApplyZoneLayout()
 	HideDefaultZoneHeader()
 	ApplyBlizzardWidgetLayout()
@@ -1729,7 +2121,7 @@ RefreshMinimap = function()
 	ApplyAutoMarkAssistCompatibility()
 end
 
-local function SetMinimapSize(size)
+SetMinimapSize = function(size)
 	local normalized = NormalizeSize(size)
 	if not normalized then
 		return nil
@@ -1741,8 +2133,274 @@ local function SetMinimapSize(size)
 	return normalized
 end
 
+local function CreateOptionsCheckbox(parent, label, tooltipText)
+	local check = CreateFrame('CheckButton', nil, parent, 'UICheckButtonTemplate')
+	check.text = check:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	check.text:SetPoint('LEFT', check, 'RIGHT', 2, 1)
+	check.text:SetJustifyH('LEFT')
+	check.text:SetWidth(360)
+	check.text:SetWordWrap(true)
+	check.text:SetText(label)
+
+	if tooltipText then
+		check:SetScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+			GameTooltip:SetText(label, 1, 1, 1)
+			GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
+			GameTooltip:Show()
+		end)
+		check:SetScript('OnLeave', GameTooltip_Hide)
+	end
+
+	return check
+end
+
+local OPTION_SLIDER_BACKDROP = {
+	bgFile = [[Interface\Buttons\UI-SliderBar-Background]],
+	edgeFile = [[Interface\Buttons\UI-SliderBar-Border]],
+	tile = true,
+	tileSize = 8,
+	edgeSize = 8,
+	insets = { left = 3, right = 3, top = 6, bottom = 6 }
+}
+
+local function UpdateOptionsSliderVisuals(slider, value)
+	if not slider or not slider.fill then
+		return
+	end
+
+	local minValue, maxValue = slider:GetMinMaxValues()
+	local range = maxValue - minValue
+	local width = slider:GetWidth() or 0
+	local normalized = 0
+	if range > 0 then
+		normalized = (value - minValue) / range
+	end
+
+	if normalized < 0 then
+		normalized = 0
+	elseif normalized > 1 then
+		normalized = 1
+	end
+
+	slider.fill:SetWidth(math.floor((width - 6) * normalized + 0.5))
+end
+
+local function SyncOptionsWindow()
+	if not optionsFrame then
+		return
+	end
+
+	local db = GetDatabase()
+
+	optionsFrame.sizeSlider.__ProkinSyncing = true
+	optionsFrame.sizeSlider:SetValue(db.size)
+	optionsFrame.sizeSlider.__ProkinSyncing = nil
+	optionsFrame.sizeSlider.valueText:SetText(string.format('%d', db.size))
+
+	optionsFrame.showAddonButton:SetChecked(db.showAddonButton ~= false)
+	optionsFrame.showServerTime:SetChecked(db.showServerTime ~= false)
+	optionsFrame.showMinimapBorder:SetChecked(db.showMinimapBorder ~= false)
+	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
+end
+
+local function ApplyOptionChange(callback)
+	if callback then
+		callback(GetDatabase())
+	end
+
+	RefreshMinimap()
+	SyncOptionsWindow()
+end
+
+local function EnsureOptionsWindow()
+	if optionsFrame then
+		return
+	end
+
+	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
+	frame:SetSize(440, 470)
+	frame:SetPoint('CENTER')
+	frame:SetFrameStrata('DIALOG')
+	frame:SetFrameLevel(200)
+	frame:EnableMouse(true)
+	frame:SetMovable(true)
+	frame:RegisterForDrag('LeftButton')
+	frame:SetClampedToScreen(true)
+	frame:SetScript('OnDragStart', frame.StartMoving)
+	frame:SetScript('OnDragStop', frame.StopMovingOrSizing)
+	frame:SetBackdrop({
+		bgFile = [[Interface\Tooltips\UI-Tooltip-Background]],
+		edgeFile = [[Interface\Tooltips\UI-Tooltip-Border]],
+		tile = true,
+		tileSize = 16,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 }
+	})
+	frame:SetBackdropColor(0.05, 0.05, 0.08, 0.95)
+	frame:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+	frame:Hide()
+
+	frame.title = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightLarge')
+	frame.title:SetPoint('TOPLEFT', frame, 'TOPLEFT', 16, -16)
+	frame.title:SetText('Prokin Minimap Options')
+
+	frame.subtitle = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	frame.subtitle:SetPoint('TOPLEFT', frame.title, 'BOTTOMLEFT', 0, -8)
+	frame.subtitle:SetWidth(392)
+	frame.subtitle:SetJustifyH('LEFT')
+	frame.subtitle:SetText('Configure the minimap, addon button, and announcement behavior.')
+
+	frame.closeButton = CreateFrame('Button', nil, frame, 'UIPanelCloseButton')
+	frame.closeButton:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -4, -4)
+
+	frame.sizeLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	frame.sizeLabel:SetPoint('TOPLEFT', frame.subtitle, 'BOTTOMLEFT', 0, -18)
+	frame.sizeLabel:SetText('Minimap Size')
+
+	frame.sizeSliderBackground = CreateFrame('Frame', nil, frame, BackdropTemplateMixin and 'BackdropTemplate' or nil)
+	frame.sizeSliderBackground:SetPoint('TOPLEFT', frame.sizeLabel, 'BOTTOMLEFT', -4, -10)
+	frame.sizeSliderBackground:SetSize(396, 86)
+	frame.sizeSliderBackground:SetBackdrop({
+		bgFile = [[Interface\Tooltips\UI-Tooltip-Background]],
+		edgeFile = [[Interface\Tooltips\UI-Tooltip-Border]],
+		tile = true,
+		tileSize = 16,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 }
+	})
+	frame.sizeSliderBackground:SetBackdropColor(0.02, 0.02, 0.02, 0.8)
+	frame.sizeSliderBackground:SetBackdropBorderColor(0.35, 0.35, 0.35, 1)
+
+	local sizeSlider = CreateFrame('Slider', 'ProkinMinimapOptionsSizeSlider', frame, BackdropTemplateMixin and 'BackdropTemplate' or nil)
+	sizeSlider:SetOrientation('HORIZONTAL')
+	sizeSlider:SetPoint('TOPLEFT', frame.sizeSliderBackground, 'TOPLEFT', 18, -22)
+	sizeSlider:SetWidth(250)
+	sizeSlider:SetHeight(15)
+	sizeSlider:SetHitRectInsets(0, 0, -10, 0)
+	sizeSlider:SetBackdrop(OPTION_SLIDER_BACKDROP)
+	sizeSlider:SetThumbTexture([[Interface\Buttons\UI-SliderBar-Button-Horizontal]])
+	sizeSlider:SetMinMaxValues(MIN_SIZE, MAX_SIZE)
+	sizeSlider:SetValueStep(10)
+	if sizeSlider.SetObeyStepOnDrag then
+		sizeSlider:SetObeyStepOnDrag(true)
+	end
+
+	sizeSlider.fill = sizeSlider:CreateTexture(nil, 'BACKGROUND')
+	sizeSlider.fill:SetColorTexture(0.85, 0.72, 0.12, 1)
+	sizeSlider.fill:SetPoint('LEFT', sizeSlider, 'LEFT', 3, 0)
+	sizeSlider.fill:SetHeight(9)
+
+	sizeSlider.lowText = frame:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
+	sizeSlider.lowText:SetPoint('TOPLEFT', sizeSlider, 'BOTTOMLEFT', 2, 3)
+	sizeSlider.lowText:SetText(tostring(MIN_SIZE))
+
+	sizeSlider.highText = frame:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
+	sizeSlider.highText:SetPoint('TOPRIGHT', sizeSlider, 'BOTTOMRIGHT', -2, 3)
+	sizeSlider.highText:SetText(tostring(MAX_SIZE))
+
+	sizeSlider.valueText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	sizeSlider.valueText:SetPoint('LEFT', sizeSlider, 'RIGHT', 24, 0)
+
+	sizeSlider:SetScript('OnValueChanged', function(self, value)
+		local normalized = NormalizeSize(value)
+		UpdateOptionsSliderVisuals(self, normalized)
+		if self.__ProkinSyncing then
+			self.valueText:SetText(string.format('%d', normalized))
+			return
+		end
+
+		if math.abs((self:GetValue() or 0) - normalized) > 0.01 then
+			self.__ProkinSyncing = true
+			self:SetValue(normalized)
+			self.__ProkinSyncing = nil
+		end
+
+		self.valueText:SetText(string.format('%d', normalized))
+		SetMinimapSize(normalized)
+	end)
+
+	local thumb = sizeSlider.GetThumbTexture and sizeSlider:GetThumbTexture()
+	if thumb and thumb.SetVertexColor then
+		thumb:SetVertexColor(1, 1, 1, 1)
+	end
+
+	frame.sizeSlider = sizeSlider
+
+	frame.resetSizeButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+	frame.resetSizeButton:SetSize(132, 22)
+	frame.resetSizeButton:SetPoint('TOPLEFT', frame.sizeSliderBackground, 'BOTTOMLEFT', 0, -14)
+	frame.resetSizeButton:SetText('Reset Size')
+	frame.resetSizeButton:SetScript('OnClick', function()
+		SetMinimapSize(DEFAULT_SIZE)
+		SyncOptionsWindow()
+	end)
+
+	frame.resetButtonButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+	frame.resetButtonButton:SetSize(174, 22)
+	frame.resetButtonButton:SetPoint('LEFT', frame.resetSizeButton, 'RIGHT', 12, 0)
+	frame.resetButtonButton:SetText('Reset Button Position')
+	frame.resetButtonButton:SetScript('OnClick', function()
+		SetAddonButtonAngle(ADDON_BUTTON_DEFAULT_ANGLE)
+		UpdateAddonButtonVisibility()
+	end)
+
+	frame.showAddonButton = CreateOptionsCheckbox(frame, 'Show Prokin minimap button', 'Show or hide the Prokin minimap button around the square minimap border.')
+	frame.showAddonButton:SetPoint('TOPLEFT', frame.resetSizeButton, 'BOTTOMLEFT', 0, -18)
+	frame.showAddonButton:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showAddonButton = self:GetChecked() and true or false
+		end)
+	end)
+
+	frame.showServerTime = CreateOptionsCheckbox(frame, 'Show server time in the zone label', 'Append the server time to the custom zone text shown above the minimap.')
+	frame.showServerTime:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -12)
+	frame.showServerTime:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showServerTime = self:GetChecked() and true or false
+		end)
+	end)
+
+	frame.showMinimapBorder = CreateOptionsCheckbox(frame, 'Show the 1px minimap border', 'Show or hide the custom black border drawn around the square minimap.')
+	frame.showMinimapBorder:SetPoint('TOPLEFT', frame.showServerTime, 'BOTTOMLEFT', 0, -12)
+	frame.showMinimapBorder:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showMinimapBorder = self:GetChecked() and true or false
+		end)
+	end)
+
+	frame.showLoadAnnouncement = CreateOptionsCheckbox(frame, 'Show the load announcement after /reload', 'Control whether Prokin Minimap announces itself in chat after loading or reloading the UI.')
+	frame.showLoadAnnouncement:SetPoint('TOPLEFT', frame.showMinimapBorder, 'BOTTOMLEFT', 0, -12)
+	frame.showLoadAnnouncement:SetScript('OnClick', function(self)
+		local enabled = self:GetChecked() and true or false
+		ApplyOptionChange(function(db)
+			db.showLoadAnnouncement = enabled
+		end)
+		if not enabled then
+			loadAnnouncementPending = nil
+		end
+	end)
+
+	frame.helpText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	frame.helpText:SetPoint('TOPLEFT', frame.showLoadAnnouncement, 'BOTTOMLEFT', 4, -18)
+	frame.helpText:SetWidth(392)
+	frame.helpText:SetJustifyH('LEFT')
+	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button.')
+	frame.helpText:SetHeight(36)
+
+	frame:SetScript('OnShow', SyncOptionsWindow)
+	optionsFrame = frame
+end
+
+OpenOptionsWindow = function()
+	EnsureOptionsWindow()
+	SyncOptionsWindow()
+	optionsFrame:Show()
+	optionsFrame:Raise()
+end
+
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Use /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Use /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm options, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -1780,6 +2438,11 @@ local function HandleSlashCommand(message)
 	if command == 'reset' or command == 'default' then
 		local size = SetMinimapSize(DEFAULT_SIZE)
 		Print(string.format('Minimap size reset to %dx%d.', size, size))
+		return
+	end
+
+	if command == 'options' or command == 'config' then
+		OpenOptionsWindow()
 		return
 	end
 
@@ -1908,6 +2571,7 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 end)
 eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	UpdateWidgetDrag()
+	UpdateAddonButtonDrag()
 
 	if loadAnnouncementPending then
 		loadAnnouncementDelay = math.max((loadAnnouncementDelay or 0) - elapsed, 0)
