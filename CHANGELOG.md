@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.27
+- Added a digital-clock safeguard that suppresses the circular minimap sundial icon (`GameTimeFrame`) whenever it appears
+- Forces Prokin Minimap to use the Blizzard digital minimap clock path so the clock consistently stays in the desired style
+
 ## v1.0.26
 - Added a Prokin minimap button with left-click role checks, right-click options access, tooltip role display, and saved edge positioning
 - Added an in-game options window for minimap size, addon button visibility, server-time display, minimap border visibility, and load-announcement toggles

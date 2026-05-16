@@ -55,6 +55,7 @@ local loadAnnouncementDelay = 0
 local zoneTimeElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
+local timeManagerLoadAttempted
 local adjustingWidgetLayout
 local minimapRefreshPending
 local addonMinimapButton
@@ -702,8 +703,38 @@ local function GetTrackingButton()
 	return candidates[1]
 end
 
+local function EnsureDigitalClockMode()
+	local sundialClock = _G.GameTimeFrame
+	if sundialClock then
+		if sundialClock.Hide then
+			sundialClock:Hide()
+		end
+
+		if not sundialClock.__ProkinHideHooked and sundialClock.HookScript then
+			sundialClock:HookScript('OnShow', function(self)
+				self:Hide()
+			end)
+			sundialClock.__ProkinHideHooked = true
+		end
+	end
+
+	if _G.TimeManagerClockButton or timeManagerLoadAttempted then
+		return
+	end
+
+	if type(LoadAddOn) ~= 'function' then
+		return
+	end
+
+	timeManagerLoadAttempted = true
+	if type(IsAddOnLoaded) ~= 'function' or not IsAddOnLoaded(TIME_MANAGER_ADDON) then
+		LoadAddOn(TIME_MANAGER_ADDON)
+	end
+end
+
 local function GetClockFrame()
-	return _G.TimeManagerClockButton or _G.GameTimeFrame
+	EnsureDigitalClockMode()
+	return _G.TimeManagerClockButton
 end
 
 local function GetMailFrame()

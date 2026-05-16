@@ -61,17 +61,15 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.26.zip`
-- **Display Name:** Prokin-Minimap v1.0.26
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.27.zip`
+- **Display Name:** Prokin-Minimap v1.0.27
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
 ## Changelog
 
-- Added a Prokin minimap button with left-click role checks, right-click options access, hover role display, and saved edge positioning
-- Added an in-game options window for minimap size, addon button visibility, server-time display, minimap border visibility, and load-announcement toggles
-- Restyled and resized the options UI, slider, and Prokin minimap button to better match the surrounding addon buttons and keep all option text within the window border
-- Changed raid role display from per-player lines to summarized Tank, Healers, and DPS counts in the tooltip and raid role-check output
+- Added a digital-clock safeguard that suppresses the circular minimap sundial icon (`GameTimeFrame`) whenever it appears
+- Forces Prokin Minimap to use the Blizzard digital minimap clock path so the clock consistently stays in the desired style
 - Fixed the battleground or PvP proxy button so queue actions like `Leave Queue` stay on Blizzard's secure battlefield button path
 - Reanchored the hidden Blizzard battlefield button to the saved proxy position so its native queue menu opens from the same place without tainting `AcceptBattlefieldPort()`
 - Fixed the battleground or PvP proxy button so both left-click and right-click open Blizzard's queue menu while queued or ready to enter
