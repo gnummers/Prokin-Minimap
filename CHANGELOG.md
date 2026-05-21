@@ -1,4 +1,6 @@
-# Changelog
+## v1.0.28
+- Hardened the Blizzard mail icon so it re-evaluates on inbox updates and re-shows itself if another addon hides it while unread mail exists
+- Added one-time mail visibility hooks so the mail frame keeps correcting itself without accumulating duplicate hooks
 
 ## v1.0.27
 - Added a digital-clock safeguard that suppresses the circular minimap sundial icon (`GameTimeFrame`) whenever it appears

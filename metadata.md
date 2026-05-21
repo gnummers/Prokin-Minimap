@@ -61,13 +61,15 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.27.zip`
-- **Display Name:** Prokin-Minimap v1.0.27
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.28.zip`
+- **Display Name:** Prokin-Minimap v1.0.28
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
 ## Changelog
 
+- Hardened the Blizzard mail icon so it re-evaluates on inbox updates and re-shows itself if another addon hides it while unread mail exists
+- Added one-time mail visibility hooks so the mail frame keeps correcting itself without accumulating duplicate hooks
 - Added a digital-clock safeguard that suppresses the circular minimap sundial icon (`GameTimeFrame`) whenever it appears
 - Forces Prokin Minimap to use the Blizzard digital minimap clock path so the clock consistently stays in the desired style
 - Fixed the battleground or PvP proxy button so queue actions like `Leave Queue` stay on Blizzard's secure battlefield button path

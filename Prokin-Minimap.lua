@@ -743,6 +743,21 @@ local function GetMailFrame()
 	return (indicator and indicator.MailFrame) or _G.MiniMapMailFrame
 end
 
+local function RefreshMailVisibility()
+	local mail = GetMailFrame()
+	if not mail then
+		return
+	end
+
+	if HasNewMail and HasNewMail() then
+		if mail.Show then
+			mail:Show()
+		end
+	elseif mail.Hide then
+		mail:Hide()
+	end
+end
+
 local function GetLFGFrame()
 	return _G.QueueStatusMinimapButton or _G.QueueStatusButton or _G.MiniMapLFGFrame or _G.LFGMinimapFrame
 end
@@ -1882,11 +1897,20 @@ ApplyBlizzardWidgetLayout = function()
 		PreserveWidgetMethods(mail)
 		HookWidgetPosition(mail)
 		AnchorStoredWidget(mail, 'mail')
-		if HasNewMail and HasNewMail() then
-			mail:Show()
-		elseif mail.Hide then
-			mail:Hide()
+		if not mail.__ProkinMailVisibilityHooksInstalled then
+			mail.__ProkinMailVisibilityHooksInstalled = true
+			if mail.HookScript then
+				mail:HookScript('OnShow', RefreshMailVisibility)
+				mail:HookScript('OnHide', RefreshMailVisibility)
+			end
+			if hooksecurefunc then
+				hooksecurefunc(mail, 'Hide', RefreshMailVisibility)
+				if mail.SetShown then
+					hooksecurefunc(mail, 'SetShown', RefreshMailVisibility)
+				end
+			end
 		end
+		RefreshMailVisibility()
 	end
 
 	local battlefield = GetBattlefieldFrame()
@@ -2553,6 +2577,8 @@ local function InstallHooks()
 	InstallAutoMarkAssistCompatibility()
 
 	for _, event in ipairs({
+		'MAIL_INBOX_UPDATE',
+		'UPDATE_PENDING_MAIL',
 		'ZONE_CHANGED',
 		'ZONE_CHANGED_INDOORS',
 		'ZONE_CHANGED_NEW_AREA'
@@ -2585,6 +2611,8 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 		else
 			return
 		end
+	elseif event == 'MAIL_INBOX_UPDATE' or event == 'UPDATE_PENDING_MAIL' then
+		ApplyBlizzardWidgetLayout()
 	elseif event == 'PLAYER_LOGIN' then
 		InstallHooks()
 	elseif event == 'PLAYER_REGEN_ENABLED' then
