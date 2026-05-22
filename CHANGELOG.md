@@ -1,3 +1,6 @@
+## v1.0.29
+- Added a periodic mail visibility watchdog that re-shows the mail icon, restores alpha, and keeps checking after reload if another addon hides it
+
 ## v1.0.28
 - Hardened the Blizzard mail icon so it re-evaluates on inbox updates and re-shows itself if another addon hides it while unread mail exists
 - Added one-time mail visibility hooks so the mail frame keeps correcting itself without accumulating duplicate hooks

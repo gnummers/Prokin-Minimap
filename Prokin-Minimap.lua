@@ -53,6 +53,7 @@ local loadAnnouncementPending
 local loadAnnouncementShown
 local loadAnnouncementDelay = 0
 local zoneTimeElapsed = 0
+local mailVisibilityElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
 local timeManagerLoadAttempted
@@ -750,10 +751,14 @@ local function RefreshMailVisibility()
 	end
 
 	if HasNewMail and HasNewMail() then
-		if mail.Show then
+		if mail.SetAlpha then
+			mail:SetAlpha(1)
+		end
+
+		if mail.Show and not mail:IsShown() then
 			mail:Show()
 		end
-	elseif mail.Hide then
+	elseif mail.Hide and mail:IsShown() then
 		mail:Hide()
 	end
 end
@@ -2635,6 +2640,12 @@ eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	if loadAnnouncementPending then
 		loadAnnouncementDelay = math.max((loadAnnouncementDelay or 0) - elapsed, 0)
 		TryShowLoadAnnouncement()
+	end
+
+	mailVisibilityElapsed = mailVisibilityElapsed + elapsed
+	if mailVisibilityElapsed >= 1 then
+		mailVisibilityElapsed = 0
+		RefreshMailVisibility()
 	end
 
 	zoneTimeElapsed = zoneTimeElapsed + elapsed
