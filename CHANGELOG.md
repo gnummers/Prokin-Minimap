@@ -1,3 +1,7 @@
+## v1.0.30
+- Fixed the mail visibility watchdog so it no longer recurses when the mail frame is hidden
+- Kept the periodic mail visibility check and alpha restore without the direct hide hook loop
+
 ## v1.0.29
 - Added a periodic mail visibility watchdog that re-shows the mail icon, restores alpha, and keeps checking after reload if another addon hides it
 

@@ -750,6 +750,12 @@ local function RefreshMailVisibility()
 		return
 	end
 
+	if mail.__ProkinMailVisibilityUpdating then
+		return
+	end
+
+	mail.__ProkinMailVisibilityUpdating = true
+
 	if HasNewMail and HasNewMail() then
 		if mail.SetAlpha then
 			mail:SetAlpha(1)
@@ -761,6 +767,8 @@ local function RefreshMailVisibility()
 	elseif mail.Hide and mail:IsShown() then
 		mail:Hide()
 	end
+
+	mail.__ProkinMailVisibilityUpdating = nil
 end
 
 local function GetLFGFrame()
@@ -1906,13 +1914,6 @@ ApplyBlizzardWidgetLayout = function()
 			mail.__ProkinMailVisibilityHooksInstalled = true
 			if mail.HookScript then
 				mail:HookScript('OnShow', RefreshMailVisibility)
-				mail:HookScript('OnHide', RefreshMailVisibility)
-			end
-			if hooksecurefunc then
-				hooksecurefunc(mail, 'Hide', RefreshMailVisibility)
-				if mail.SetShown then
-					hooksecurefunc(mail, 'SetShown', RefreshMailVisibility)
-				end
 			end
 		end
 		RefreshMailVisibility()
