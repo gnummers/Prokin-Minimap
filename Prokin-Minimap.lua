@@ -261,6 +261,12 @@ GetDatabase = function()
 	if type(ProkinMinimapDB.widgetPositions) ~= 'table' then
 		ProkinMinimapDB.widgetPositions = {}
 	end
+	if type(ProkinMinimapDB.goldTracker) ~= 'table' then
+		ProkinMinimapDB.goldTracker = {}
+	end
+	if type(ProkinMinimapDB.goldTracker.goldTrackingEnabled) ~= 'boolean' then
+		ProkinMinimapDB.goldTracker.goldTrackingEnabled = true
+	end
 	if type(ProkinMinimapDB.debugTrackingConfigured) ~= 'boolean' then
 		ProkinMinimapDB.debugTracking = false
 		ProkinMinimapDB.debugTrackingConfigured = false
@@ -913,6 +919,42 @@ local function AddGroupRoleTooltipLines(tooltip)
 	for index = 1, partyMembers do
 		AddRoleTooltipLine(tooltip, 'party' .. index)
 	end
+end
+
+local function AddGoldTrackerTooltipLine(tooltip)
+	if not tooltip then
+		return
+	end
+
+	local tracker = _G.ProkinMinimapGoldTracker
+	if not tracker then
+		return
+	end
+
+	local lines = type(tracker.GetTooltipLines) == 'function' and tracker:GetTooltipLines() or nil
+	if type(lines) == 'table' then
+		if #lines == 0 then
+			return
+		end
+
+		tooltip:AddLine(' ')
+		for _, line in ipairs(lines) do
+			tooltip:AddLine(line, 1, 0.82, 0)
+		end
+		return
+	end
+
+	if type(tracker.GetTooltipLine) ~= 'function' then
+		return
+	end
+
+	local line = tracker:GetTooltipLine()
+	if not line then
+		return
+	end
+
+	tooltip:AddLine(' ')
+	tooltip:AddLine(line, 1, 0.82, 0)
 end
 
 local function TriggerRoleCheck()
@@ -2123,6 +2165,7 @@ local function EnsureAddonMinimapButton()
 		GameTooltip:AddLine('Left-Click: Start a role check', 0.85, 0.85, 0.85)
 		GameTooltip:AddLine('Right-Click: Open options', 0.85, 0.85, 0.85)
 		GameTooltip:AddLine('Alt-Left-Drag: Move button', 0.85, 0.85, 0.85)
+		AddGoldTrackerTooltipLine(GameTooltip)
 		AddGroupRoleTooltipLines(GameTooltip)
 		GameTooltip:Show()
 	end)
@@ -2263,6 +2306,7 @@ local function SyncOptionsWindow()
 	optionsFrame.showServerTime:SetChecked(db.showServerTime ~= false)
 	optionsFrame.showMinimapBorder:SetChecked(db.showMinimapBorder ~= false)
 	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
+	optionsFrame.enableGoldTracking:SetChecked(db.goldTracker and db.goldTracker.goldTrackingEnabled ~= false)
 end
 
 local function ApplyOptionChange(callback)
@@ -2280,7 +2324,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(440, 470)
+	frame:SetSize(440, 500)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -2407,7 +2451,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showAddonButton = CreateOptionsCheckbox(frame, 'Show Prokin minimap button', 'Show or hide the Prokin minimap button around the square minimap border.')
-	frame.showAddonButton:SetPoint('TOPLEFT', frame.resetSizeButton, 'BOTTOMLEFT', 0, -18)
+	frame.showAddonButton:SetPoint('TOPLEFT', frame.resetSizeButton, 'BOTTOMLEFT', 0, -14)
 	frame.showAddonButton:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showAddonButton = self:GetChecked() and true or false
@@ -2415,7 +2459,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showServerTime = CreateOptionsCheckbox(frame, 'Show server time in the zone label', 'Append the server time to the custom zone text shown above the minimap.')
-	frame.showServerTime:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -12)
+	frame.showServerTime:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -8)
 	frame.showServerTime:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showServerTime = self:GetChecked() and true or false
@@ -2423,7 +2467,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showMinimapBorder = CreateOptionsCheckbox(frame, 'Show the 1px minimap border', 'Show or hide the custom black border drawn around the square minimap.')
-	frame.showMinimapBorder:SetPoint('TOPLEFT', frame.showServerTime, 'BOTTOMLEFT', 0, -12)
+	frame.showMinimapBorder:SetPoint('TOPLEFT', frame.showServerTime, 'BOTTOMLEFT', 0, -8)
 	frame.showMinimapBorder:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showMinimapBorder = self:GetChecked() and true or false
@@ -2431,7 +2475,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showLoadAnnouncement = CreateOptionsCheckbox(frame, 'Show the load announcement after /reload', 'Control whether Prokin Minimap announces itself in chat after loading or reloading the UI.')
-	frame.showLoadAnnouncement:SetPoint('TOPLEFT', frame.showMinimapBorder, 'BOTTOMLEFT', 0, -12)
+	frame.showLoadAnnouncement:SetPoint('TOPLEFT', frame.showMinimapBorder, 'BOTTOMLEFT', 0, -8)
 	frame.showLoadAnnouncement:SetScript('OnClick', function(self)
 		local enabled = self:GetChecked() and true or false
 		ApplyOptionChange(function(db)
@@ -2442,12 +2486,23 @@ local function EnsureOptionsWindow()
 		end
 	end)
 
+	frame.enableGoldTracking = CreateOptionsCheckbox(frame, 'Enable gold tracking', 'Track gold income and item values in the Prokin Minimap tooltip.')
+	frame.enableGoldTracking:SetPoint('TOPLEFT', frame.showLoadAnnouncement, 'BOTTOMLEFT', 0, -8)
+	frame.enableGoldTracking:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			if type(db.goldTracker) ~= 'table' then
+				db.goldTracker = {}
+			end
+			db.goldTracker.goldTrackingEnabled = self:GetChecked() and true or false
+		end)
+	end)
+
 	frame.helpText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	frame.helpText:SetPoint('TOPLEFT', frame.showLoadAnnouncement, 'BOTTOMLEFT', 4, -18)
+	frame.helpText:SetPoint('TOPLEFT', frame.enableGoldTracking, 'BOTTOMLEFT', 4, -14)
 	frame.helpText:SetWidth(392)
 	frame.helpText:SetJustifyH('LEFT')
-	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button.')
-	frame.helpText:SetHeight(36)
+	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
+	frame.helpText:SetHeight(58)
 
 	frame:SetScript('OnShow', SyncOptionsWindow)
 	optionsFrame = frame

@@ -1,3 +1,7 @@
+## v1.0.31
+- Added TSM-independent item pricing fallback so gold tracking still works without TradeSkillMaster installed
+- Added visible TradeSkillMaster author credit in the options help text and documentation
+
 ## v1.0.30
 - Fixed the mail visibility watchdog so it no longer recurses when the mail frame is hidden
 - Kept the periodic mail visibility check and alpha restore without the direct hide hook loop
