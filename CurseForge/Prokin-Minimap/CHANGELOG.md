@@ -1,6 +1,3 @@
-## v1.0.34
-- Tooltip and gold tracking now display negative values for net loss (e.g., after repairs or expenses)
-
 ## v1.0.33
 - Added comprehensive expense tracking system with multi-category support (repairs, postage, crafting, disenchanting)
 - Implemented per-character ledgers with timestamped expense history and category breakdowns
