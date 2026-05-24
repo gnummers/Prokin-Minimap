@@ -1,3 +1,7 @@
+## v1.0.32
+- Changed the persistent Daily Total so each character tracks its own total separately
+- Kept the midnight server-time reset behavior for each character's daily total
+
 ## v1.0.31
 - Added TSM-independent item pricing fallback so gold tracking still works without TradeSkillMaster installed
 - Added visible TradeSkillMaster author credit in the options help text and documentation

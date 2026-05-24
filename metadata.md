@@ -61,8 +61,8 @@ Saved variable:
 
 ## Initial Release File
 
-- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.31.zip`
-- **Display Name:** Prokin-Minimap v1.0.31
+- **File:** `C:\Users\moose\source\repos\Prokin-Minimap\CurseForge\Prokin-Minimap-1.0.32.zip`
+- **Display Name:** Prokin-Minimap v1.0.32
 - **Release Type:** Release
 - **Supported Version:** Select the TBC / Burning Crusade Anniversary option that matches interface `20505`
 
@@ -74,6 +74,8 @@ Saved variable:
 - Fixed the mail visibility watchdog so it no longer recurses when the mail frame is hidden
 - Added TSM-independent item pricing fallback so gold tracking still works without TradeSkillMaster installed
 - Added visible TradeSkillMaster author credit in the options help text and documentation
+- Changed the persistent Daily Total so each character tracks its own total separately
+- Kept the midnight server-time reset behavior for each character's daily total
 - Added a digital-clock safeguard that suppresses the circular minimap sundial icon (`GameTimeFrame`) whenever it appears
 - Forces Prokin Minimap to use the Blizzard digital minimap clock path so the clock consistently stays in the desired style
 - Fixed the battleground or PvP proxy button so queue actions like `Leave Queue` stay on Blizzard's secure battlefield button path

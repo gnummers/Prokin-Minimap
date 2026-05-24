@@ -29,23 +29,62 @@ local function GetServerDayKey()
 	return date('%Y-%m-%d', serverTime)
 end
 
-local function EnsureDailyState()
+local function GetCharacterKey()
+	local name, realm = UnitName('player')
+	if not name or name == '' then
+		return 'unknown'
+	end
+
+	realm = realm or GetRealmName() or ''
+	if realm ~= '' then
+		return name .. '-' .. realm
+	end
+
+	return name
+end
+
+local function GetCharacterState()
 	local db = GetTrackerDB()
+	if type(db.characters) ~= 'table' then
+		db.characters = {}
+	end
+
+	local key = GetCharacterKey()
+	local state = db.characters[key]
+	if type(state) ~= 'table' then
+		state = {}
+		db.characters[key] = state
+	end
+
+	if not db.__legacyDailyTotalMigrated
+		and (type(db.dailyTotalCopper) == 'number' or type(db.dailyTotalDayKey) == 'string') then
+		state.dailyTotalCopper = state.dailyTotalCopper or db.dailyTotalCopper or 0
+		state.dailyTotalDayKey = state.dailyTotalDayKey or db.dailyTotalDayKey or GetServerDayKey()
+		db.dailyTotalCopper = nil
+		db.dailyTotalDayKey = nil
+		db.__legacyDailyTotalMigrated = true
+	end
+
+	return db, state
+end
+
+local function EnsureDailyState()
+	local db, state = GetCharacterState()
 	if type(db.goldTrackingEnabled) ~= 'boolean' then
 		db.goldTrackingEnabled = true
 	end
 
 	local dayKey = GetServerDayKey()
-	if db.dailyTotalDayKey ~= dayKey then
-		db.dailyTotalDayKey = dayKey
-		db.dailyTotalCopper = 0
+	if state.dailyTotalDayKey ~= dayKey then
+		state.dailyTotalDayKey = dayKey
+		state.dailyTotalCopper = 0
 	end
 
-	if type(db.dailyTotalCopper) ~= 'number' then
-		db.dailyTotalCopper = 0
+	if type(state.dailyTotalCopper) ~= 'number' then
+		state.dailyTotalCopper = 0
 	end
 
-	return db
+	return db, state
 end
 
 local function IsGoldTrackingEnabled()
@@ -124,9 +163,9 @@ local function AddIncome(copper)
 		return
 	end
 
-	local db = EnsureDailyState()
+	local _, state = EnsureDailyState()
 	sessionIncomeCopper = sessionIncomeCopper + copper
-	db.dailyTotalCopper = (db.dailyTotalCopper or 0) + copper
+	state.dailyTotalCopper = (state.dailyTotalCopper or 0) + copper
 end
 
 local function GetTrackedItemLink(itemRef)
@@ -299,7 +338,8 @@ function tracker:GetSessionIncome()
 end
 
 function tracker:GetDailyTotal()
-	return EnsureDailyState().dailyTotalCopper or 0
+	local _, state = EnsureDailyState()
+	return state.dailyTotalCopper or 0
 end
 
 function tracker:GetSessionGPH()
