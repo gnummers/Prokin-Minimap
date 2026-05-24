@@ -1,3 +1,15 @@
+## v1.0.33
+- Added comprehensive expense tracking system with multi-category support (repairs, postage, crafting, disenchanting)
+- Implemented per-character ledgers with timestamped expense history and category breakdowns
+- Added inventory worth calculation using TSM pricing or vendor fallback
+- Simplified tooltip to show only GPH, Session net, and Daily net income
+- Added new slash commands: `/pkm ledger`, `/pkm expenses`, `/pkm allcharacters`
+- Automatic repair cost detection via `GetRepairAllCost()`
+- Automatic postage detection via `GetSendMailPrice()`
+- Crafting material cost tracking through inventory snapshots
+- Disenchanting transaction detection via chat message parsing
+- Maintained backward compatibility with existing tracking features
+
 ## v1.0.32
 - Changed the persistent Daily Total so each character tracks its own total separately
 - Kept the midnight server-time reset behavior for each character's daily total
