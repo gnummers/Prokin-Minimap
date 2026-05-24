@@ -2516,7 +2516,7 @@ OpenOptionsWindow = function()
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Use /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm options, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -2574,6 +2574,41 @@ local function HandleSlashCommand(message)
 		GetDatabase().debugTrackingConfigured = true
 
 		Print(string.format('Tracking debug is now %s.', GetDatabase().debugTracking and 'enabled' or 'disabled'))
+		return
+	end
+
+	if command == 'ledger' then
+		local ledger = _G.ProkinMinimapLedger
+		if ledger and type(ledger.PrintCharacterLedger) == 'function' then
+			if remainder and remainder ~= '' then
+				ledger:PrintCharacterLedger(remainder)
+			else
+				ledger:PrintCharacterLedger()
+			end
+		else
+			Print('Ledger system not loaded.')
+		end
+		return
+	end
+
+	if command == 'expenses' then
+		local ledger = _G.ProkinMinimapLedger
+		if ledger and type(ledger.PrintExpenseHistory) == 'function' then
+			local limit = tonumber(remainder) or 10
+			ledger:PrintExpenseHistory(nil, limit)
+		else
+			Print('Ledger system not loaded.')
+		end
+		return
+	end
+
+	if command == 'allcharacters' or command == 'all' then
+		local ledger = _G.ProkinMinimapLedger
+		if ledger and type(ledger.PrintAllCharacters) == 'function' then
+			ledger:PrintAllCharacters()
+		else
+			Print('Ledger system not loaded.')
+		end
 		return
 	end
 

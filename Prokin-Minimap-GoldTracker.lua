@@ -4,13 +4,16 @@ _G.ProkinMinimapGoldTracker = tracker
 local eventFrame = CreateFrame('Frame')
 local sessionStartedAt = 0
 local sessionIncomeCopper = 0
+local sessionExpenseCopper = 0
 local lastMoneyCopper
 local trackedInventoryCounts = {}
 local pendingItemIncome = {}
+local pendingItemExpense = {}
 local pendingInventoryScanAt
 local mailHooksInstalled
 local VALUE_PRICE_SOURCE = 'dbmarket'
 local dailyResetElapsed = 0
+local lastMailCost = 0
 
 local function GetTrackerDB()
 	if type(ProkinMinimapDB) ~= 'table' then
@@ -65,6 +68,14 @@ local function GetCharacterState()
 		db.__legacyDailyTotalMigrated = true
 	end
 
+	if type(state.dailyExpenses) ~= 'table' then
+		state.dailyExpenses = {}
+	end
+
+	if type(state.expenses) ~= 'table' then
+		state.expenses = {}
+	end
+
 	return db, state
 end
 
@@ -78,10 +89,20 @@ local function EnsureDailyState()
 	if state.dailyTotalDayKey ~= dayKey then
 		state.dailyTotalDayKey = dayKey
 		state.dailyTotalCopper = 0
+		state.dailyExpenseCopper = 0
+		state.dailyExpenses = {}
 	end
 
 	if type(state.dailyTotalCopper) ~= 'number' then
 		state.dailyTotalCopper = 0
+	end
+
+	if type(state.dailyExpenseCopper) ~= 'number' then
+		state.dailyExpenseCopper = 0
+	end
+
+	if type(state.dailyExpenses) ~= 'table' then
+		state.dailyExpenses = {}
 	end
 
 	return db, state
@@ -168,6 +189,34 @@ local function AddIncome(copper)
 	state.dailyTotalCopper = (state.dailyTotalCopper or 0) + copper
 end
 
+local function AddExpense(copper, category)
+	if not IsGoldTrackingEnabled() then
+		return
+	end
+
+	copper = math.floor((copper or 0) + 0.5)
+	if copper <= 0 then
+		return
+	end
+
+	category = category or 'other'
+	local _, state = EnsureDailyState()
+	sessionExpenseCopper = sessionExpenseCopper + copper
+	state.dailyExpenseCopper = (state.dailyExpenseCopper or 0) + copper
+
+	local timestamp = GetTime()
+	table.insert(state.expenses, {
+		timestamp = timestamp,
+		copper = copper,
+		category = category
+	})
+
+	if type(state.dailyExpenses) ~= 'table' then
+		state.dailyExpenses = {}
+	end
+	state.dailyExpenses[category] = (state.dailyExpenses[category] or 0) + copper
+end
+
 local function GetTrackedItemLink(itemRef)
 	if type(itemRef) == 'string' then
 		return itemRef
@@ -213,12 +262,34 @@ local function GetTrackedItemValue(itemRef)
 	return sellPrice
 end
 
+local function ProcessLootMessage(message)
+	if not IsGoldTrackingEnabled() then
+		return
+	end
+
+	if message:find("Disenchant") or message:find("disenchant") then
+		QueueInventoryScan()
+	end
+end
+
 local function UpdateMoneySnapshot()
 	local currentMoney = GetMoney() or 0
 	if lastMoneyCopper ~= nil then
 		local delta = currentMoney - lastMoneyCopper
 		if delta > 0 then
 			AddIncome(delta)
+		elseif delta < 0 then
+			local absDelta = math.abs(delta)
+			local repairCost = 0
+			if type(GetRepairAllCost) == 'function' then
+				repairCost = GetRepairAllCost() or 0
+			end
+			if repairCost > 0 and repairCost == absDelta then
+				AddExpense(absDelta, 'repair')
+			elseif absDelta > 0 and lastMailCost == 0 then
+				AddExpense(absDelta, 'other_expense')
+			end
+			lastMailCost = 0
 		end
 	end
 
@@ -237,6 +308,45 @@ local function QueueItemIncome(itemID, quantity)
 	end
 
 	pendingItemIncome[itemID] = (pendingItemIncome[itemID] or 0) + quantity
+end
+
+local function QueueItemExpense(itemID, quantity, category)
+	if not itemID or quantity <= 0 or not IsGoldTrackingEnabled() then
+		return
+	end
+
+	category = category or 'item_loss'
+	local value = GetTrackedItemValue(itemID)
+	if value ~= nil then
+		AddExpense(value * quantity, category)
+		return
+	end
+
+	if not pendingItemExpense[itemID] then
+		pendingItemExpense[itemID] = {}
+	end
+	pendingItemExpense[itemID].quantity = (pendingItemExpense[itemID].quantity or 0) + quantity
+	pendingItemExpense[itemID].category = category
+end
+
+local function ResolvePendingItemExpense(itemID)
+	local pending = pendingItemExpense[itemID]
+	if not pending then
+		return
+	end
+
+	if not IsGoldTrackingEnabled() then
+		pendingItemExpense[itemID] = nil
+		return
+	end
+
+	local value = GetTrackedItemValue(itemID)
+	if value == nil then
+		return
+	end
+
+	AddExpense(value * pending.quantity, pending.category)
+	pendingItemExpense[itemID] = nil
 end
 
 local function ResolvePendingItemIncome(itemID)
@@ -287,6 +397,14 @@ local function ApplyInventorySnapshot()
 		local previousCount = trackedInventoryCounts[itemID] or 0
 		if currentCount > previousCount then
 			QueueItemIncome(itemID, currentCount - previousCount)
+		elseif currentCount < previousCount then
+			QueueItemExpense(itemID, previousCount - currentCount, 'crafting_material')
+		end
+	end
+
+	for itemID, previousCount in pairs(trackedInventoryCounts) do
+		if not currentCounts[itemID] then
+			QueueItemExpense(itemID, previousCount, 'crafting_material')
 		end
 	end
 
@@ -326,6 +444,29 @@ local function InstallMailHooks()
 		end)
 	end
 
+	if type(SendMail) == 'function' and type(GetSendMailPrice) == 'function' then
+		hooksecurefunc('SendMail', function()
+			local postagePrice = GetSendMailPrice() or 0
+			if postagePrice > 0 then
+				AddExpense(postagePrice, 'postage')
+				lastMailCost = postagePrice
+			end
+		end)
+	end
+
+	if type(RepairAllItems) == 'function' then
+		hooksecurefunc('RepairAllItems', function()
+			UpdateMoneySnapshot()
+		end)
+	end
+
+	if type(GetRepairAllCost) == 'function' then
+		local originalGetRepairAllCost = GetRepairAllCost
+		function GetRepairAllCost()
+			return originalGetRepairAllCost()
+		end
+	end
+
 	mailHooksInstalled = true
 end
 
@@ -337,9 +478,72 @@ function tracker:GetSessionIncome()
 	return sessionIncomeCopper
 end
 
+function tracker:GetSessionExpense()
+	return sessionExpenseCopper
+end
+
+function tracker:GetSessionNetIncome()
+	return sessionIncomeCopper - sessionExpenseCopper
+end
+
 function tracker:GetDailyTotal()
 	local _, state = EnsureDailyState()
 	return state.dailyTotalCopper or 0
+end
+
+function tracker:GetDailyExpense()
+	local _, state = EnsureDailyState()
+	return state.dailyExpenseCopper or 0
+end
+
+function tracker:GetDailyNetIncome()
+	return self:GetDailyTotal() - self:GetDailyExpense()
+end
+
+function tracker:GetDailyExpenseBreakdown()
+	local _, state = EnsureDailyState()
+	return state.dailyExpenses or {}
+end
+
+function tracker:GetInventoryWorth()
+	local worth = 0
+	for bag = 0, GetNumBagSlots() do
+		local slotCount = GetContainerSlotCount(bag)
+		for slot = 1, slotCount do
+			local itemID, stackCount = GetBagItemInfo(bag, slot)
+			if itemID and stackCount and stackCount > 0 then
+				local value = GetTrackedItemValue(itemID)
+				if value then
+					worth = worth + (value * stackCount)
+				end
+			end
+		end
+	end
+	return worth
+end
+
+function tracker:GetCharacterExpenseHistory(limit)
+	limit = limit or 50
+	local _, state = EnsureDailyState()
+	local expenses = state.expenses or {}
+	local result = {}
+	for i = math.max(1, #expenses - limit + 1), #expenses do
+		table.insert(result, expenses[i])
+	end
+	return result
+end
+
+function tracker:GetExpenseByCategory(category)
+	local _, state = EnsureDailyState()
+	return state.dailyExpenses and state.dailyExpenses[category] or 0
+end
+
+function tracker:ResetSessionTracking()
+	sessionIncomeCopper = 0
+	sessionExpenseCopper = 0
+	sessionStartedAt = GetTime()
+	lastMoneyCopper = GetMoney() or 0
+	trackedInventoryCounts = SnapshotInventory()
 end
 
 function tracker:GetSessionGPH()
@@ -348,7 +552,7 @@ function tracker:GetSessionGPH()
 		return 0
 	end
 
-	return math.floor((sessionIncomeCopper / elapsed) * 3600 + 0.5)
+	return math.floor((self:GetSessionNetIncome() / elapsed) * 3600 + 0.5)
 end
 
 function tracker:GetTooltipLine()
@@ -370,8 +574,8 @@ function tracker:GetTooltipLines()
 
 	return {
 		string.format('GPH: %s', FormatCopperValue(self:GetSessionGPH())),
-		string.format('Session Total: %s', FormatCopperValue(sessionIncomeCopper)),
-		string.format('Daily Total: %s', FormatCopperValue(self:GetDailyTotal()))
+		string.format('Session: %s', FormatCopperValue(self:GetSessionNetIncome())),
+		string.format('Daily: %s', FormatCopperValue(self:GetDailyNetIncome()))
 	}
 end
 
@@ -389,9 +593,11 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1, arg2)
 		EnsureDailyState()
 		sessionStartedAt = GetTime()
 		sessionIncomeCopper = 0
+		sessionExpenseCopper = 0
 		lastMoneyCopper = GetMoney() or 0
 		trackedInventoryCounts = SnapshotInventory()
 		wipe(pendingItemIncome)
+		wipe(pendingItemExpense)
 		pendingInventoryScanAt = nil
 		InstallMailHooks()
 		return
@@ -407,6 +613,9 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1, arg2)
 	end
 
 	if event == 'CHAT_MSG_LOOT' or event == 'QUEST_TURNED_IN' then
+		if event == 'CHAT_MSG_LOOT' then
+			ProcessLootMessage(arg1)
+		end
 		QueueInventoryScan()
 		return
 	end
@@ -429,6 +638,7 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1, arg2)
 	if event == 'GET_ITEM_INFO_RECEIVED' then
 		if arg2 then
 			ResolvePendingItemIncome(arg1)
+			ResolvePendingItemExpense(arg1)
 		end
 	end
 end)
