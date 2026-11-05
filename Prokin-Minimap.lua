@@ -2373,36 +2373,61 @@ local function ApplyAddonButtonLayout()
 		table.insert(entries, { button = dayNightFrame, keepSize = true })
 	end
 
-	-- The first icon and the gap between columns stay fixed, so the slider only changes
-	-- the distance between icons in a column.
-	local spacing = GetDatabase().addonButtonSpacing
-	local topOffset = ALIGNED_BUTTON.SPACING * 0.5
-	local rowCount = math.max(math.floor(((Minimap:GetHeight() or DEFAULT_SIZE) - (topOffset * 2)) / spacing) + 1, 1)
-	local index = 0
+	-- Only buttons a player can see take a slot, so invisible ones can't leave gaps. A button
+	-- can count as shown and still be invisible, through zero alpha or a hidden parent.
+	-- LibDBIcon's show-on-hover buttons fade to zero alpha, so they keep their place, but go
+	-- last to keep the always-visible icons together.
+	local visible = {}
+	local hoverOnly = {}
 	for _, entry in ipairs(entries) do
 		local button = entry.button
-		if button:IsShown() then
-			local row = index % rowCount
-			local column = math.floor(index / rowCount)
-			index = index + 1
-
-			if not entry.keepSize then
-				NormalizeAddonButton(button)
+		if button:IsVisible() then
+			if button.showOnMouseover then
+				table.insert(hoverOnly, entry)
+			elseif button:GetAlpha() > 0 then
+				table.insert(visible, entry)
 			end
-
-			-- A dragged button would only snap back here, so turn dragging off.
-			button:RegisterForDrag()
-			button:ClearAllPoints()
-			-- These have different parents, so convert the offsets from Minimap units.
-			local scaleRatio = Minimap:GetEffectiveScale() / button:GetEffectiveScale()
-			button:SetPoint(
-				'CENTER',
-				Minimap,
-				'TOPLEFT',
-				column * ALIGNED_BUTTON.SPACING * scaleRatio,
-				-(topOffset + (row * spacing)) * scaleRatio
-			)
 		end
+	end
+
+	for _, entry in ipairs(hoverOnly) do
+		table.insert(visible, entry)
+	end
+
+	-- Icons tighten to stay in one straight column on a shorter map, down to the point where
+	-- their rings would touch, or to the player's own spacing if that is already tighter.
+	-- Anything still left over starts a new column outward, so it never covers the map.
+	local topOffset = ALIGNED_BUTTON.SPACING * 0.5
+	local usableHeight = math.max((Minimap:GetHeight() or DEFAULT_SIZE) - (topOffset * 2), 0)
+	local spacing = GetDatabase().addonButtonSpacing
+	if #visible > 1 then
+		local fitted = usableHeight / (#visible - 1)
+		spacing = math.max(math.min(spacing, fitted), math.min(spacing, ALIGNED_BUTTON.SIZE))
+	end
+
+	-- The small allowance keeps rounding from pushing an exact fit into a new column.
+	local rowCount = math.max(math.floor((usableHeight / spacing) + 0.001) + 1, 1)
+	for index, entry in ipairs(visible) do
+		local button = entry.button
+		local row = (index - 1) % rowCount
+		local column = math.floor((index - 1) / rowCount)
+
+		if not entry.keepSize then
+			NormalizeAddonButton(button)
+		end
+
+		-- A dragged button would only snap back here, so turn dragging off.
+		button:RegisterForDrag()
+		button:ClearAllPoints()
+		-- These have different parents, so convert the offsets from Minimap units.
+		local scaleRatio = Minimap:GetEffectiveScale() / button:GetEffectiveScale()
+		button:SetPoint(
+			'CENTER',
+			Minimap,
+			'TOPLEFT',
+			-column * ALIGNED_BUTTON.SPACING * scaleRatio,
+			-(topOffset + (row * spacing)) * scaleRatio
+		)
 	end
 end
 

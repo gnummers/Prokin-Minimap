@@ -1,3 +1,7 @@
+## v1.0.38
+- Fixed addon icons breaking out of the left-border column on minimaps smaller than 400. Icons now tighten to fit, and any that still don't fit start a new column outside the map
+- Fixed invisible addon buttons leaving gaps in the left-border column. Show-on-hover buttons now go after the always-visible icons
+
 ## v1.0.37
 - Added movable Blizzard buff icons: unlock them from the options window or `/pkm buffs`, then drag the blue box. Debuffs stay anchored under the buffs
 
