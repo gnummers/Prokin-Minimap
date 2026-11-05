@@ -49,6 +49,7 @@ Slash commands:
 - `/pkm smaller 50`
 - `/pkm reset`
 - `/pkm zonetext <number|reset>`
+- `/pkm buffs [unlock|lock|reset]`
 - `/pkm resetmoon`
 - `/pkm options`
 

@@ -1,3 +1,6 @@
+## v1.0.37
+- Added movable Blizzard buff icons: unlock them from the options window or `/pkm buffs`, then drag the blue box. Debuffs stay anchored under the buffs
+
 ## v1.0.36
 - Added World of Warcraft: Forever support (TOC `16001`) alongside The Burning Crusade Anniversary
 - Updated the Anniversary TOC to `20506` for patch 2.5.6

@@ -318,6 +318,10 @@ GetDatabase = function()
 	ProkinMinimapDB.zoneTextSize = NormalizeZoneTextSize(ProkinMinimapDB.zoneTextSize)
 	local addonButtonSpacing = math.floor((tonumber(ProkinMinimapDB.addonButtonSpacing) or ALIGNED_BUTTON.SPACING) + 0.5)
 	ProkinMinimapDB.addonButtonSpacing = math.max(ALIGNED_BUTTON.MIN_SPACING, math.min(addonButtonSpacing, ALIGNED_BUTTON.MAX_SPACING))
+	local buffFramePosition = ProkinMinimapDB.buffFramePosition
+	if type(buffFramePosition) ~= 'table' or type(buffFramePosition.x) ~= 'number' or type(buffFramePosition.y) ~= 'number' then
+		ProkinMinimapDB.buffFramePosition = nil
+	end
 	local dayNightPosition = ProkinMinimapDB.dayNightPosition
 	if type(dayNightPosition) ~= 'table' or type(dayNightPosition.x) ~= 'number' or type(dayNightPosition.y) ~= 'number' then
 		ProkinMinimapDB.dayNightPosition = nil
@@ -2153,6 +2157,142 @@ function DayNightIndicator.EnableDragging()
 	indicator:HookScript('OnEvent', DayNightIndicator.ApplySize)
 end
 
+-- Moves Blizzard's buff icons with a drag handle. Nothing here touches the frames until the
+-- player has saved a position. Forever's buff and debuff frames are separate Edit Mode systems,
+-- so debuffs are anchored under the buffs to keep them from being left on the map. The Base
+-- methods skip Edit Mode's snap tracking, which addon code should not disturb.
+local BuffIcons = { MIN_WIDTH = 200, MIN_HEIGHT = 40 }
+
+function BuffIcons.CanMove()
+	if type(InCombatLockdown) == 'function' and InCombatLockdown() then
+		return false
+	end
+
+	local editMode = _G.EditModeManagerFrame
+	return not (editMode and editMode.IsEditModeActive and editMode:IsEditModeActive())
+end
+
+function BuffIcons.Anchor(frame, point, relativeTo, relativePoint, x, y)
+	local clearAllPoints = frame.ClearAllPointsBase or frame.ClearAllPoints
+	local setPoint = frame.SetPointBase or frame.SetPoint
+	clearAllPoints(frame)
+	setPoint(frame, point, relativeTo, relativePoint, x, y)
+end
+
+function BuffIcons.ApplyLayout()
+	local buffs = _G.BuffFrame
+	local position = GetDatabase().buffFramePosition
+	if not buffs or not position or not BuffIcons.CanMove() then
+		return
+	end
+
+	local scaleRatio = _G.UIParent:GetEffectiveScale() / buffs:GetEffectiveScale()
+	BuffIcons.Anchor(buffs, 'TOPRIGHT', _G.UIParent, 'TOPRIGHT', position.x * scaleRatio, position.y * scaleRatio)
+
+	if _G.DebuffFrame then
+		BuffIcons.Anchor(_G.DebuffFrame, 'TOPRIGHT', buffs, 'BOTTOMRIGHT', -13, -5)
+	end
+end
+
+function BuffIcons.UpdateMoverSize()
+	local mover, buffs = BuffIcons.mover, _G.BuffFrame
+	if mover and buffs then
+		mover:SetSize(
+			math.max(buffs:GetWidth() or 0, BuffIcons.MIN_WIDTH),
+			math.max(buffs:GetHeight() or 0, BuffIcons.MIN_HEIGHT)
+		)
+	end
+end
+
+-- Positions are saved as the frame's top-right corner, in UIParent units from the screen's
+-- top-right corner, and kept on screen.
+function BuffIcons.UpdateDrag()
+	local grab = BuffIcons.grab
+	if not grab then
+		return
+	end
+
+	local scale = _G.UIParent:GetEffectiveScale()
+	local cursorX, cursorY = GetCursorPosition()
+	local width, height = _G.UIParent:GetWidth(), _G.UIParent:GetHeight()
+	GetDatabase().buffFramePosition = {
+		x = math.max(-width, math.min((cursorX / scale) - grab.x - width, 0)),
+		y = math.max(-height, math.min((cursorY / scale) - grab.y - height, 0))
+	}
+	BuffIcons.ApplyLayout()
+end
+
+function BuffIcons.StartDrag()
+	local buffs = _G.BuffFrame
+	local right, top = buffs and buffs:GetRight(), buffs and buffs:GetTop()
+	if not right or not top then
+		return
+	end
+
+	local scale = _G.UIParent:GetEffectiveScale()
+	local frameScale = buffs:GetEffectiveScale()
+	local cursorX, cursorY = GetCursorPosition()
+	BuffIcons.grab = {
+		x = (cursorX / scale) - (right * frameScale / scale),
+		y = (cursorY / scale) - (top * frameScale / scale)
+	}
+end
+
+function BuffIcons.EnsureMover()
+	if BuffIcons.mover or not _G.BuffFrame then
+		return BuffIcons.mover
+	end
+
+	local mover = CreateFrame('Frame', 'ProkinMinimapBuffMover', _G.UIParent)
+	mover:SetFrameStrata('HIGH')
+	mover:SetPoint('TOPRIGHT', _G.BuffFrame, 'TOPRIGHT', 0, 0)
+	mover:EnableMouse(true)
+	mover:RegisterForDrag('LeftButton')
+	mover:SetClampedToScreen(true)
+	mover:Hide()
+
+	mover.background = mover:CreateTexture(nil, 'BACKGROUND')
+	mover.background:SetAllPoints(mover)
+	mover.background:SetColorTexture(0.1, 0.5, 0.9, 0.45)
+
+	mover.label = mover:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	mover.label:SetPoint('CENTER', mover, 'CENTER', 0, 0)
+	mover.label:SetText('Buff Icons: drag to move')
+
+	mover:SetScript('OnDragStart', BuffIcons.StartDrag)
+	mover:SetScript('OnDragStop', function()
+		BuffIcons.UpdateDrag()
+		BuffIcons.grab = nil
+	end)
+	mover:SetScript('OnHide', function()
+		BuffIcons.grab = nil
+	end)
+
+	BuffIcons.mover = mover
+	return mover
+end
+
+function BuffIcons.SetUnlocked(unlocked)
+	local mover = BuffIcons.EnsureMover()
+	if not mover then
+		return false
+	end
+
+	BuffIcons.UpdateMoverSize()
+	mover:SetShown(unlocked)
+	return true
+end
+
+function BuffIcons.IsUnlocked()
+	return BuffIcons.mover ~= nil and BuffIcons.mover:IsShown()
+end
+
+function BuffIcons.Reset()
+	GetDatabase().buffFramePosition = nil
+	BuffIcons.SetUnlocked(false)
+	Print('Buff icon position cleared. Type /reload to return them to Blizzard\'s position.')
+end
+
 local function IsAddonButtonAlignmentEnabled()
 	return GetDatabase().alignAddonButtons ~= false
 end
@@ -2340,6 +2480,7 @@ ApplyBlizzardWidgetLayout = function()
 	end
 
 	ApplyForeverAddonCompartmentLayout()
+	BuffIcons.ApplyLayout()
 	DayNightIndicator.EnableDragging()
 	DayNightIndicator.ApplyLayout()
 	ApplyAddonButtonLayout()
@@ -2742,6 +2883,8 @@ local function SyncOptionsWindow()
 	spacingSlider.valueText:SetText(string.format('%d', db.addonButtonSpacing))
 	spacingSlider:SetEnabled(db.alignAddonButtons ~= false)
 	optionsFrame.resetAddonSpacingButton:SetEnabled(db.alignAddonButtons ~= false)
+
+	optionsFrame.unlockBuffsButton:SetText(BuffIcons.IsUnlocked() and 'Lock Buff Icons' or 'Unlock Buff Icons')
 	optionsFrame.showServerTime:SetChecked(db.showServerTime ~= false)
 	optionsFrame.showMinimapBorder:SetChecked(db.showMinimapBorder ~= false)
 	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
@@ -2763,7 +2906,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(440, 658)
+	frame:SetSize(440, 690)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -2978,7 +3121,24 @@ local function EnsureOptionsWindow()
 	)
 
 	frame.showAddonButton = CreateOptionsCheckbox(frame, 'Show Prokin minimap button', 'Show or hide the Prokin minimap button around the square minimap border.')
-	frame.showAddonButton:SetPoint('TOPLEFT', frame.addonSpacingLabel, 'BOTTOMLEFT', 0, -48)
+	frame.unlockBuffsButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+	frame.unlockBuffsButton:SetSize(150, 22)
+	frame.unlockBuffsButton:SetPoint('TOPLEFT', frame.addonSpacingLabel, 'BOTTOMLEFT', 0, -48)
+	frame.unlockBuffsButton:SetScript('OnClick', function()
+		BuffIcons.SetUnlocked(not BuffIcons.IsUnlocked())
+		SyncOptionsWindow()
+	end)
+
+	frame.resetBuffsButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+	frame.resetBuffsButton:SetSize(150, 22)
+	frame.resetBuffsButton:SetPoint('LEFT', frame.unlockBuffsButton, 'RIGHT', 12, 0)
+	frame.resetBuffsButton:SetText('Reset Buff Icons')
+	frame.resetBuffsButton:SetScript('OnClick', function()
+		BuffIcons.Reset()
+		SyncOptionsWindow()
+	end)
+
+	frame.showAddonButton:SetPoint('TOPLEFT', frame.unlockBuffsButton, 'BOTTOMLEFT', 0, -10)
 	frame.showAddonButton:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showAddonButton = self:GetChecked() and true or false
@@ -3055,7 +3215,7 @@ OpenOptionsWindow = function()
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -3093,6 +3253,25 @@ local function HandleSlashCommand(message)
 	if command == 'reset' or command == 'default' then
 		local size = SetMinimapSize(DEFAULT_SIZE)
 		Print(string.format('Minimap size reset to %dx%d.', size, size))
+		return
+	end
+
+	if command == 'buffs' then
+		local action = string.lower(remainder or '')
+		if action == 'reset' then
+			BuffIcons.Reset()
+		elseif action == 'unlock' or action == 'lock' or action == '' then
+			local unlock = action == 'unlock' or (action == '' and not BuffIcons.IsUnlocked())
+			if BuffIcons.SetUnlocked(unlock) then
+				Print(unlock and 'Buff icons unlocked. Drag the blue box to move them.' or 'Buff icons locked.')
+			else
+				Print('Buff icons are unavailable on this client.')
+			end
+		else
+			Print('Usage: /pkm buffs [unlock|lock|reset]')
+		end
+
+		SyncOptionsWindow()
 		return
 	end
 
@@ -3295,6 +3474,7 @@ eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	UpdateWidgetDrag()
 	UpdateAddonButtonDrag()
 	DayNightIndicator.UpdateDrag()
+	BuffIcons.UpdateDrag()
 
 	if loadAnnouncementPending then
 		loadAnnouncementDelay = math.max((loadAnnouncementDelay or 0) - elapsed, 0)

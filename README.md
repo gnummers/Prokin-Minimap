@@ -25,6 +25,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Gives the Prokin button, LibDBIcon addon buttons, Blizzard tracking button, and Forever day/night icon one size and lines them up along the left border, with an option to turn this off and a slider for the spacing between them
 - Resizable zone text, from the options window or `/pkm zonetext`
 - With icon alignment off, lets you left-drag the Forever day/night icon anywhere on the minimap
+- Lets you move Blizzard's buff icons, with debuffs following underneath, from the options window or `/pkm buffs`
 - Saved minimap size with a default of **400x400**
 
 ## Compatibility
@@ -52,6 +53,8 @@ On Forever, Blizzard's native queue eye replaces the LFG proxy button, so it app
 - `/pkm reset` - restore the default `400x400` size
 - `/pkm zonetext 14` - set the zone text size, from 8 to 32
 - `/pkm zonetext reset` - restore the default zone text size
+- `/pkm buffs` - unlock or lock the buff icons, then drag the blue box to move them
+- `/pkm buffs reset` - clear the saved buff position, then `/reload` to restore Blizzard's position
 - `/pkm resetmoon` - restore the default position of the Forever day/night icon when icon alignment is off
 - `/pkm options` - open the Prokin Minimap options window
 
