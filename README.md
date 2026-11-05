@@ -1,6 +1,6 @@
 # Prokin-Minimap
 
-Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversary** that turns the minimap into a square using the same mask approach ElvUI uses for TBC.
+Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversary** and **World of Warcraft: Forever** that turns the minimap into a square using the same mask approach ElvUI uses for TBC.
 
 ## Features
 
@@ -22,18 +22,23 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Lets you left-drag the visible Blizzard minimap widgets around the outside edge of the square minimap border
 - Includes MinimapButtonButton compatibility so those Blizzard widgets are not pulled into its collected button tray
 - Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
+- Gives the Prokin button, LibDBIcon addon buttons, Blizzard tracking button, and Forever day/night icon one size and lines them up along the left border, with an option to turn this off and a slider for the spacing between them
+- Resizable zone text, from the options window or `/pkm zonetext`
+- With icon alignment off, lets you left-drag the Forever day/night icon anywhere on the minimap
 - Saved minimap size with a default of **400x400**
 
 ## Compatibility
 
-- **Game version:** The Burning Crusade Anniversary
-- **Interface:** `20505`
+- **Game versions:** The Burning Crusade Anniversary, World of Warcraft: Forever
+- **Interface:** `20506`, `16001`
+
+On Forever, Blizzard's native queue eye replaces the LFG proxy button, so it appears only while queued and cannot be dragged. Blizzard's calendar button stays hidden, as it does on Anniversary.
 
 ## Installation
 
 1. Download or clone this repository.
 2. Copy the `Prokin-Minimap` folder into:
-   `C:\World of Warcraft\_anniversary_\Interface\AddOns\`
+   `C:\World of Warcraft\_anniversary_\Interface\AddOns\` or `C:\World of Warcraft\_forever_\Interface\AddOns\`
 3. Start the game and enable **Prokin-Minimap** in the addon list.
 
 ## Usage
@@ -45,6 +50,9 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - `/pkm smaller` - decrease size by 25
 - `/pkm smaller 50` - decrease size by a custom step
 - `/pkm reset` - restore the default `400x400` size
+- `/pkm zonetext 14` - set the zone text size, from 8 to 32
+- `/pkm zonetext reset` - restore the default zone text size
+- `/pkm resetmoon` - restore the default position of the Forever day/night icon when icon alignment is off
 - `/pkm options` - open the Prokin Minimap options window
 
 ### Gold Tracking Commands

@@ -11,7 +11,10 @@ local ZONE_HEADER_SPACING = 4
 local BORDER_SIZE = 1
 local WIDGET_EDGE_PADDING = 0
 local WIDGET_BORDER_OVERLAP = 12
-local CLOCK_BOTTOM_OFFSET = -5
+local PLAYER_COORDS_OFFSET = 4
+local MIN_ZONE_TEXT_SIZE = 8
+local MAX_ZONE_TEXT_SIZE = 32
+local ALIGNED_BUTTON = { SIZE = 31, SPACING = 36, MIN_SPACING = 26, MAX_SPACING = 64, BORDER_SIZE = 50, BACKGROUND_SIZE = 24, ICON_SIZE = 18 }
 local ADDON_BUTTON_DEFAULT_ANGLE = 180
 local PROXY_BUTTON_SIZE = 33
 local PROXY_BACKGROUND_SIZE = 30
@@ -30,6 +33,10 @@ local ADDON_MINIMAP_ANCHOR_OFFSET_X = 3
 local ADDON_MINIMAP_ANCHOR_OFFSET_Y = 0
 local ADDON_BUTTON_NAME = 'ProkinMinimapButton'
 local SQUARE_MASK = [[Interface\ChatFrame\ChatFrameBackground]]
+local INTERFACE_VERSION = select(4, GetBuildInfo()) or 0
+-- Forever is 1.60+ (TOC 16001). Classic Era is also 1.x, but stays below 16000.
+local IS_FOREVER = INTERFACE_VERSION >= 16000 and INTERFACE_VERSION < 20000
+local FOREVER_TRACKING_ATLAS = 'ui-hud-minimap-tracking-button'
 local HIDDEN_TEXTURES = {
 	'MinimapBorder',
 	'MinimapBorderTop',
@@ -56,7 +63,10 @@ local zoneTimeElapsed = 0
 local mailVisibilityElapsed = 0
 local lastZoneTimeSuffix
 local autoMarkAssistHookInstalled
-local timeManagerLoadAttempted
+local zoneTextFont
+local zoneTextFlags
+local zoneTextDefaultSize
+local appliedZoneTextSize
 local adjustingWidgetLayout
 local minimapRefreshPending
 local addonMinimapButton
@@ -93,6 +103,11 @@ local WIDGET_BLACKLIST_NAMES = {
 }
 
 local function Noop() end
+
+-- Secret values (Forever) cannot be compared, tested, or used as table keys by addon code.
+local function IsSecret(value)
+	return type(issecretvalue) == 'function' and issecretvalue(value)
+end
 
 local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format('|cff33ff99%s|r: %s', ADDON_NAME, message))
@@ -252,6 +267,16 @@ local function NormalizeAngle(angle)
 	return angle
 end
 
+local function NormalizeZoneTextSize(size)
+	size = tonumber(size)
+	if not size then
+		return nil
+	end
+
+	size = math.floor(size + 0.5)
+	return math.max(MIN_ZONE_TEXT_SIZE, math.min(size, MAX_ZONE_TEXT_SIZE))
+end
+
 GetDatabase = function()
 	if type(ProkinMinimapDB) ~= 'table' then
 		ProkinMinimapDB = {}
@@ -287,7 +312,46 @@ GetDatabase = function()
 	if type(ProkinMinimapDB.showMinimapBorder) ~= 'boolean' then
 		ProkinMinimapDB.showMinimapBorder = true
 	end
+	if type(ProkinMinimapDB.alignAddonButtons) ~= 'boolean' then
+		ProkinMinimapDB.alignAddonButtons = true
+	end
+	ProkinMinimapDB.zoneTextSize = NormalizeZoneTextSize(ProkinMinimapDB.zoneTextSize)
+	local addonButtonSpacing = math.floor((tonumber(ProkinMinimapDB.addonButtonSpacing) or ALIGNED_BUTTON.SPACING) + 0.5)
+	ProkinMinimapDB.addonButtonSpacing = math.max(ALIGNED_BUTTON.MIN_SPACING, math.min(addonButtonSpacing, ALIGNED_BUTTON.MAX_SPACING))
+	local dayNightPosition = ProkinMinimapDB.dayNightPosition
+	if type(dayNightPosition) ~= 'table' or type(dayNightPosition.x) ~= 'number' or type(dayNightPosition.y) ~= 'number' then
+		ProkinMinimapDB.dayNightPosition = nil
+	end
 	return ProkinMinimapDB
+end
+
+-- Forever anchors the zoom buttons at fixed offsets for its 198px round minimap,
+-- which would strand them in the middle of a resized square map.
+local function ApplyForeverZoomLayout()
+	if not IS_FOREVER or not Minimap.ZoomIn or not Minimap.ZoomOut or not Minimap.ZoomHitArea then
+		return
+	end
+
+	Minimap.ZoomHitArea:ClearAllPoints()
+	Minimap.ZoomHitArea:SetPoint('BOTTOMRIGHT', Minimap, 'BOTTOMRIGHT', 0, 0)
+	Minimap.ZoomOut:ClearAllPoints()
+	Minimap.ZoomOut:SetPoint('BOTTOMRIGHT', Minimap, 'BOTTOMRIGHT', -4, 4)
+	Minimap.ZoomIn:ClearAllPoints()
+	Minimap.ZoomIn:SetPoint('BOTTOMRIGHT', Minimap, 'BOTTOMRIGHT', -4, 15)
+end
+
+-- Blizzard leaves the coordinates 18px below the map with their top edge floating,
+-- so pin them directly under the bottom border and centered on the map.
+local function ApplyPlayerCoordsLayout()
+	local cluster = _G.MinimapCluster
+	local container = cluster and cluster.MinimapContainer
+	local coords = container and container.PlayerCoords
+	if not coords then
+		return
+	end
+
+	coords:ClearAllPoints()
+	coords:SetPoint('TOP', Minimap, 'BOTTOM', 0, -PLAYER_COORDS_OFFSET)
 end
 
 local function ApplySquareMinimap()
@@ -307,6 +371,9 @@ local function ApplySquareMinimap()
 	if _G.MinimapBackdrop then
 		_G.MinimapBackdrop:Hide()
 	end
+
+	ApplyForeverZoomLayout()
+	ApplyPlayerCoordsLayout()
 end
 
 local function EnsureMinimapBorder()
@@ -376,6 +443,25 @@ local function EnsureCustomZoneHeader()
 	if not zoneHeaderText:GetFont() then
 		zoneHeaderText:SetFontObject(GameFontNormalSmall)
 	end
+
+	zoneTextFont, zoneTextDefaultSize, zoneTextFlags = zoneHeaderText:GetFont()
+end
+
+local function GetZoneTextSize()
+	EnsureCustomZoneHeader()
+	return GetDatabase().zoneTextSize or NormalizeZoneTextSize(zoneTextDefaultSize) or 12
+end
+
+local function ApplyZoneTextSize()
+	if not zoneHeaderText or not zoneTextFont then
+		return
+	end
+
+	local size = GetZoneTextSize()
+	if size ~= appliedZoneTextSize then
+		zoneHeaderText:SetFont(zoneTextFont, size, zoneTextFlags or '')
+		appliedZoneTextSize = size
+	end
 end
 
 local function EnsureHiddenZoneHeaderParent()
@@ -422,6 +508,8 @@ local function UpdateZoneHeaderText()
 	if not zoneHeaderFrame or not zoneHeaderText then
 		return
 	end
+
+	ApplyZoneTextSize()
 
 	local text = GetZoneHeaderText()
 	zoneHeaderText:SetText(text)
@@ -614,6 +702,12 @@ local function ApplyHybridMinimap()
 			mapCanvas:EnableMouseWheel(true)
 		end
 
+		-- Must run first: clearing the mask while masking is on calls AddMaskTexture(nil),
+		-- and SetUseMaskTexture raises an error once no mask is set.
+		if mapCanvas.SetUseMaskTexture and mapCanvas.GetMaskTexture and mapCanvas:GetMaskTexture() then
+			mapCanvas:SetUseMaskTexture(false)
+		end
+
 		if mapCanvas.SetMaskTexture then
 			mapCanvas:SetMaskTexture()
 		end
@@ -710,38 +804,27 @@ local function GetTrackingButton()
 	return candidates[1]
 end
 
-local function EnsureDigitalClockMode()
-	local sundialClock = _G.GameTimeFrame
-	if sundialClock then
-		if sundialClock.Hide then
-			sundialClock:Hide()
-		end
-
-		if not sundialClock.__ProkinHideHooked and sundialClock.HookScript then
-			sundialClock:HookScript('OnShow', function(self)
-				self:Hide()
-			end)
-			sundialClock.__ProkinHideHooked = true
-		end
-	end
-
-	if _G.TimeManagerClockButton or timeManagerLoadAttempted then
+local function KeepFrameHidden(frame)
+	if not frame then
 		return
 	end
 
-	if type(LoadAddOn) ~= 'function' then
-		return
+	if frame.Hide then
+		frame:Hide()
 	end
 
-	timeManagerLoadAttempted = true
-	if type(IsAddOnLoaded) ~= 'function' or not IsAddOnLoaded(TIME_MANAGER_ADDON) then
-		LoadAddOn(TIME_MANAGER_ADDON)
+	if not frame.__ProkinHideHooked and frame.HookScript then
+		frame:HookScript('OnShow', function(self)
+			self:Hide()
+		end)
+		frame.__ProkinHideHooked = true
 	end
 end
 
-local function GetClockFrame()
-	EnsureDigitalClockMode()
-	return _G.TimeManagerClockButton
+-- The zone label already shows the time, so neither Blizzard clock is displayed.
+local function HideBlizzardClocks()
+	KeepFrameHidden(_G.GameTimeFrame)
+	KeepFrameHidden(_G.TimeManagerClockButton)
 end
 
 local function GetMailFrame()
@@ -770,6 +853,12 @@ local function RefreshMailVisibility()
 		if mail.Show and not mail:IsShown() then
 			mail:Show()
 		end
+
+		-- Forever hides this icon whenever the frame hides and only restores it from
+		-- UPDATE_PENDING_MAIL, so re-showing the frame alone would leave it invisible.
+		if mail.MailIcon and mail.MailIcon.Show then
+			mail.MailIcon:Show()
+		end
 	elseif mail.Hide and mail:IsShown() then
 		mail:Hide()
 	end
@@ -787,11 +876,16 @@ end
 
 local function GetAssignedRole(unit)
 	local role = type(UnitGroupRolesAssigned) == 'function' and UnitGroupRolesAssigned(unit) or nil
+	if IsSecret(role) then
+		return 'NONE'
+	end
+
 	if role == nil or role == '' then
 		role = 'NONE'
 	end
 
-	if role == 'NONE' and type(GetPartyAssignment) == 'function' and GetPartyAssignment('MAINTANK', unit, true) then
+	local isMainTank = type(GetPartyAssignment) == 'function' and GetPartyAssignment('MAINTANK', unit, true)
+	if role == 'NONE' and not IsSecret(isMainTank) and isMainTank then
 		return 'TANK'
 	end
 
@@ -823,11 +917,17 @@ local function GetRoleColor(role)
 end
 
 local function GetUnitDisplayName(unit)
+	local name
 	if type(GetUnitName) == 'function' then
-		return GetUnitName(unit, true) or UNKNOWN
+		name = GetUnitName(unit, true)
+	else
+		name = UnitName(unit)
 	end
 
-	local name = UnitName(unit)
+	if IsSecret(name) then
+		return name
+	end
+
 	return name or UNKNOWN
 end
 
@@ -838,7 +938,10 @@ local function AddRoleTooltipLine(tooltip, unit)
 
 	local name = GetUnitDisplayName(unit)
 	local classToken = select(2, UnitClass(unit))
-	local classColor = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[classToken]) or RAID_CLASS_COLORS[classToken] or NORMAL_FONT_COLOR
+	local classColor = NORMAL_FONT_COLOR
+	if not IsSecret(classToken) then
+		classColor = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[classToken]) or RAID_CLASS_COLORS[classToken] or NORMAL_FONT_COLOR
+	end
 	local role = GetAssignedRole(unit)
 	local roleR, roleG, roleB = GetRoleColor(role)
 	tooltip:AddDoubleLine(name, GetRoleLabel(role), classColor.r or 1, classColor.g or 1, classColor.b or 1, roleR, roleG, roleB)
@@ -1047,12 +1150,7 @@ local function GetWidgetAnchorOffsets(frame, widgetId, edge, coord)
 	elseif edge == 'right' then
 		return outsideX, coord * verticalRange
 	elseif edge == 'bottom' then
-		local yOffset = -outsideY
-		if widgetId == 'clock' then
-			yOffset = yOffset + CLOCK_BOTTOM_OFFSET
-		end
-
-		return coord * horizontalRange, yOffset
+		return coord * horizontalRange, -outsideY
 	end
 
 	return -outsideX, coord * verticalRange
@@ -1190,12 +1288,15 @@ local function SetProxyButtonPressed(button, pressed)
 		return
 	end
 
+	local offsetX = button.__ProkinIconCentered and 0 or PROXY_ICON_OFFSET_X
+	local offsetY = button.__ProkinIconCentered and 0 or PROXY_ICON_OFFSET_Y
+
 	button.icon:ClearAllPoints()
 	if pressed then
-		button.icon:SetPoint('CENTER', button, 'CENTER', PROXY_ICON_OFFSET_X + 1, PROXY_ICON_OFFSET_Y - 1)
+		button.icon:SetPoint('CENTER', button, 'CENTER', offsetX + 1, offsetY - 1)
 		button.overlay:Show()
 	else
-		button.icon:SetPoint('CENTER', button, 'CENTER', PROXY_ICON_OFFSET_X, PROXY_ICON_OFFSET_Y)
+		button.icon:SetPoint('CENTER', button, 'CENTER', offsetX, offsetY)
 		button.overlay:Hide()
 	end
 end
@@ -1660,7 +1761,7 @@ local function EnsureTrackingProxy()
 	end
 	trackingProxyButton:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
-		GameTooltip:SetText(TRACKING, 1, 1, 1)
+		GameTooltip:SetText(TRACKING or 'Tracking', 1, 1, 1)
 		GameTooltip:AddLine(MINIMAP_TRACKING_TOOLTIP_NONE, nil, nil, nil, true)
 		GameTooltip:Show()
 	end)
@@ -1850,6 +1951,31 @@ local function EnsureBattlefieldProxy()
 	MakeWidgetDraggable(battlefieldProxyButton, 'battlefield')
 end
 
+local function GetTrackingTypeCount()
+	if type(C_Minimap) == 'table' and C_Minimap.GetNumTrackingTypes then
+		return C_Minimap.GetNumTrackingTypes() or 0
+	end
+
+	return GetNumTrackingTypes and GetNumTrackingTypes() or 0
+end
+
+-- Returns texture, active, category, spellID. C_Minimap returns a table on Forever,
+-- while older clients return separate values.
+local function GetTrackingDetails(id)
+	local name, texture, active, category
+	if type(C_Minimap) == 'table' and C_Minimap.GetTrackingInfo then
+		name, texture, active, category = C_Minimap.GetTrackingInfo(id)
+	elseif GetTrackingInfo then
+		name, texture, active, category = GetTrackingInfo(id)
+	end
+
+	if type(name) == 'table' then
+		return name.texture, name.active, name.type, name.spellID
+	end
+
+	return texture, active, category
+end
+
 local function UpdateTrackingProxy()
 	EnsureTrackingProxy()
 	if not trackingProxyButton then
@@ -1858,17 +1984,25 @@ local function UpdateTrackingProxy()
 
 	local texturePath = [[Interface\Minimap\Tracking\None]]
 	local left, right, top, bottom = 0, 1, 0, 1
-	local count = GetNumTrackingTypes and GetNumTrackingTypes() or 0
+	local hasActiveTracking
 
-	for id = 1, count do
-		local _, texture, active, category = GetTrackingInfo(id)
-		if active then
+	for id = 1, GetTrackingTypeCount() do
+		local texture, active, category, spellID = GetTrackingDetails(id)
+		-- Forever keeps always-on filters such as quest POIs active, so only a tracking
+		-- spell should replace the default icon there.
+		if active and (not IS_FOREVER or category == 'spell' or spellID) then
+			hasActiveTracking = true
 			texturePath = texture or texturePath
-			if category == 'spell' then
+			if category == 'spell' or spellID then
 				left, right, top, bottom = 0.0625, 0.9, 0.0625, 0.9
 			end
 			break
 		end
+	end
+
+	if IS_FOREVER and not hasActiveTracking and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(FOREVER_TRACKING_ATLAS) then
+		trackingProxyButton.icon:SetAtlas(FOREVER_TRACKING_ATLAS)
+		return
 	end
 
 	trackingProxyButton.icon:SetTexture(texturePath)
@@ -1898,12 +2032,268 @@ local function UpdateLFGProxy()
 	lfgProxyButton.icon:SetTexCoord(left, right, top, bottom)
 end
 
+-- Forever anchors its day/night indicator to the center of the minimap container, so it
+-- floats inside a resized map. Blizzard also re-anchors it whenever the Edit Mode scale
+-- changes, so ApplyLayout runs with the regular widget layout. The frame deliberately keeps
+-- its own inverse scale, so offsets are converted from Minimap units. The default Y offset
+-- leaves room for the addon compartment above it.
+local DayNightIndicator = { OFFSET_X = -2, OFFSET_Y = -28, BORDER_ATLAS = 'UI-HUD-Minimap-Frame-Cycle' }
+
+function DayNightIndicator.GetFrame()
+	local cluster = _G.MinimapCluster
+	return cluster and cluster.DielFrame
+end
+
+-- Matches the aligned addon icons. Blizzard resets the moon or sun texture to its full atlas
+-- size each time the day/night cycle changes, so this is also hooked to its OnEvent.
+function DayNightIndicator.ApplySize()
+	local indicator = DayNightIndicator.GetFrame()
+	if not indicator or GetDatabase().alignAddonButtons == false or not C_Texture or not C_Texture.GetAtlasInfo then
+		return
+	end
+
+	local borderInfo = C_Texture.GetAtlasInfo(DayNightIndicator.BORDER_ATLAS)
+	if not borderInfo or not borderInfo.width or borderInfo.width <= 0 then
+		return
+	end
+
+	local scaleRatio = Minimap:GetEffectiveScale() / indicator:GetEffectiveScale()
+	local fraction = (ALIGNED_BUTTON.SIZE * scaleRatio) / borderInfo.width
+	indicator:SetSize(borderInfo.width * fraction, borderInfo.height * fraction)
+
+	local background = indicator.Background
+	local backgroundAtlas = background and background.GetAtlas and background:GetAtlas()
+	local backgroundInfo = backgroundAtlas and C_Texture.GetAtlasInfo(backgroundAtlas)
+	if backgroundInfo then
+		background:SetSize(backgroundInfo.width * fraction, backgroundInfo.height * fraction)
+	end
+end
+
+function DayNightIndicator.ApplyLayout()
+	local indicator = DayNightIndicator.GetFrame()
+	if not indicator then
+		return
+	end
+
+	DayNightIndicator.ApplySize()
+
+	-- Blizzard's frame level can leave it under the Minimap for mouse input.
+	indicator:SetFrameLevel(Minimap:GetFrameLevel() + 5)
+
+	-- While aligned, ApplyAddonButtonLayout places it in the icon column instead.
+	if GetDatabase().alignAddonButtons ~= false then
+		return
+	end
+
+	indicator:RegisterForDrag('LeftButton')
+
+	local scaleRatio = Minimap:GetEffectiveScale() / indicator:GetEffectiveScale()
+	local position = GetDatabase().dayNightPosition
+	indicator:ClearAllPoints()
+	if position then
+		-- Saved as a fraction of the map's half-size so it follows minimap resizing.
+		indicator:SetPoint(
+			'CENTER',
+			Minimap,
+			'CENTER',
+			position.x * Minimap:GetWidth() * 0.5 * scaleRatio,
+			position.y * Minimap:GetHeight() * 0.5 * scaleRatio
+		)
+	else
+		indicator:SetPoint('TOPRIGHT', Minimap, 'TOPRIGHT', DayNightIndicator.OFFSET_X * scaleRatio, DayNightIndicator.OFFSET_Y * scaleRatio)
+	end
+end
+
+function DayNightIndicator.UpdateDrag()
+	if not DayNightIndicator.dragging then
+		return
+	end
+
+	local scale = Minimap:GetEffectiveScale() or 1
+	local cursorX, cursorY = GetCursorPosition()
+	local centerX, centerY = Minimap:GetCenter()
+	if not centerX or not centerY then
+		return
+	end
+
+	GetDatabase().dayNightPosition = {
+		x = ClampWidgetCoord(((cursorX / scale) - centerX) / (Minimap:GetWidth() * 0.5)),
+		y = ClampWidgetCoord(((cursorY / scale) - centerY) / (Minimap:GetHeight() * 0.5))
+	}
+	DayNightIndicator.ApplyLayout()
+end
+
+function DayNightIndicator.EnableDragging()
+	local indicator = DayNightIndicator.GetFrame()
+	if not indicator or indicator.__ProkinDragEnabled then
+		return
+	end
+
+	indicator.__ProkinDragEnabled = true
+	indicator:EnableMouse(true)
+	indicator:RegisterForDrag('LeftButton')
+	indicator:HookScript('OnDragStart', function()
+		DayNightIndicator.dragging = true
+		GameTooltip_Hide()
+	end)
+	indicator:HookScript('OnDragStop', function()
+		DayNightIndicator.UpdateDrag()
+		DayNightIndicator.dragging = nil
+	end)
+	indicator:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+		GameTooltip:AddLine('Day/Night', 1, 1, 1)
+		if GetDatabase().alignAddonButtons == false then
+			GameTooltip:AddLine('Left-Drag: Move icon', 0.85, 0.85, 0.85)
+			GameTooltip:AddLine('/pkm resetmoon: Restore position', 0.85, 0.85, 0.85)
+		end
+		GameTooltip:Show()
+	end)
+	indicator:HookScript('OnLeave', GameTooltip_Hide)
+	indicator:HookScript('OnEvent', DayNightIndicator.ApplySize)
+end
+
+local function IsAddonButtonAlignmentEnabled()
+	return GetDatabase().alignAddonButtons ~= false
+end
+
+-- Addons embed different LibDBIcon versions, and buttons built by older ones use other
+-- sizes and offsets. Older versions also keep their border and background in unnamed
+-- textures, so those have to be found by draw layer.
+local NormalizeAddonButton
+do
+	local function FindTextureInLayer(button, drawLayer)
+		for _, region in ipairs({ button:GetRegions() }) do
+			if region:GetObjectType() == 'Texture' and region:GetDrawLayer() == drawLayer then
+				return region
+			end
+		end
+	end
+
+	NormalizeAddonButton = function(button)
+		button.__ProkinIconCentered = true
+		button:SetScale(1)
+		button:SetSize(ALIGNED_BUTTON.SIZE, ALIGNED_BUTTON.SIZE)
+
+		local border = button.border or FindTextureInLayer(button, 'OVERLAY')
+		if border then
+			border:ClearAllPoints()
+			border:SetPoint('TOPLEFT', button, 'TOPLEFT', 0, 0)
+			border:SetSize(ALIGNED_BUTTON.BORDER_SIZE, ALIGNED_BUTTON.BORDER_SIZE)
+		end
+
+		local background = button.background or FindTextureInLayer(button, 'BACKGROUND')
+		if background then
+			background:ClearAllPoints()
+			background:SetPoint('CENTER', button, 'CENTER', 0, 0)
+			background:SetSize(ALIGNED_BUTTON.BACKGROUND_SIZE, ALIGNED_BUTTON.BACKGROUND_SIZE)
+		end
+
+		if button.icon then
+			button.icon:ClearAllPoints()
+			button.icon:SetPoint('CENTER', button, 'CENTER', 0, 0)
+			button.icon:SetSize(ALIGNED_BUTTON.ICON_SIZE, ALIGNED_BUTTON.ICON_SIZE)
+		end
+	end
+end
+
+local function ApplyAddonButtonLayout()
+	if not Minimap or not IsAddonButtonAlignmentEnabled() then
+		return
+	end
+
+	local entries = {}
+	if addonMinimapButton then
+		table.insert(entries, { key = '', button = addonMinimapButton })
+	end
+
+	local libDBIcon = _G.LibStub and _G.LibStub('LibDBIcon-1.0', true)
+	if libDBIcon and type(libDBIcon.objects) == 'table' then
+		for name, button in pairs(libDBIcon.objects) do
+			table.insert(entries, { key = tostring(name), button = button })
+		end
+	end
+
+	table.sort(entries, function(a, b)
+		return a.key < b.key
+	end)
+
+	-- Blizzard's controls follow the addon icons. The moon is sized by DayNightIndicator,
+	-- because its border is stretched across the whole frame.
+	if trackingProxyButton then
+		table.insert(entries, { button = trackingProxyButton })
+	end
+
+	if lfgProxyButton and not IS_FOREVER then
+		table.insert(entries, { button = lfgProxyButton })
+	end
+
+	local dayNightFrame = DayNightIndicator.GetFrame()
+	if dayNightFrame then
+		table.insert(entries, { button = dayNightFrame, keepSize = true })
+	end
+
+	-- The first icon and the gap between columns stay fixed, so the slider only changes
+	-- the distance between icons in a column.
+	local spacing = GetDatabase().addonButtonSpacing
+	local topOffset = ALIGNED_BUTTON.SPACING * 0.5
+	local rowCount = math.max(math.floor(((Minimap:GetHeight() or DEFAULT_SIZE) - (topOffset * 2)) / spacing) + 1, 1)
+	local index = 0
+	for _, entry in ipairs(entries) do
+		local button = entry.button
+		if button:IsShown() then
+			local row = index % rowCount
+			local column = math.floor(index / rowCount)
+			index = index + 1
+
+			if not entry.keepSize then
+				NormalizeAddonButton(button)
+			end
+
+			-- A dragged button would only snap back here, so turn dragging off.
+			button:RegisterForDrag()
+			button:ClearAllPoints()
+			-- These have different parents, so convert the offsets from Minimap units.
+			local scaleRatio = Minimap:GetEffectiveScale() / button:GetEffectiveScale()
+			button:SetPoint(
+				'CENTER',
+				Minimap,
+				'TOPLEFT',
+				column * ALIGNED_BUTTON.SPACING * scaleRatio,
+				-(topOffset + (row * spacing)) * scaleRatio
+			)
+		end
+	end
+end
+
+-- Forever anchors the addon compartment to GameTimeFrame, which anchors to the suppressed
+-- zone header, so it would be left with no valid position without this.
+local function ApplyForeverAddonCompartmentLayout()
+	local compartment = _G.AddonCompartmentFrame
+	if not IS_FOREVER or not compartment then
+		return
+	end
+
+	PreserveWidgetMethods(compartment)
+	HookWidgetPosition(compartment)
+	AnchorWidget(compartment, 'TOPRIGHT', 'TOPRIGHT', -2, -2)
+end
+
 ApplyBlizzardWidgetLayout = function()
+	if type(InCombatLockdown) == 'function' and InCombatLockdown() then
+		minimapRefreshPending = true
+		return
+	end
+
 	local tracking = GetTrackingFrame()
 	EnsureTrackingProxy()
 	UpdateTrackingProxy()
 	if trackingProxyButton then
-		AnchorProxy(trackingProxyButton, 'tracking')
+		if not IsAddonButtonAlignmentEnabled() then
+			trackingProxyButton:RegisterForDrag('LeftButton')
+			AnchorProxy(trackingProxyButton, 'tracking')
+		end
+
 		trackingProxyButton:Show()
 	end
 
@@ -1917,37 +2307,53 @@ ApplyBlizzardWidgetLayout = function()
 		if _G.MiniMapTracking and _G.MiniMapTracking.SetAlpha then
 			_G.MiniMapTracking:SetAlpha(0)
 		end
-	end
 
-	local lfg = GetLFGFrame()
-	EnsureLFGProxy()
-	UpdateLFGProxy()
-	if lfgProxyButton then
-		AnchorProxy(lfgProxyButton, 'lfg')
-		lfgProxyButton:Show()
-	end
-
-	if lfg then
-		PreserveWidgetMethods(lfg)
-		HookWidgetPosition(lfg)
-		if lfg.SetAlpha then
-			lfg:SetAlpha(0)
+		-- Forever draws a background on the parent of the tracking button.
+		local cluster = _G.MinimapCluster
+		if IS_FOREVER and cluster and cluster.Tracking and cluster.Tracking.SetAlpha then
+			cluster.Tracking:SetAlpha(0)
 		end
 	end
 
-	local clock = GetClockFrame()
-	if clock then
-		MakeWidgetDraggable(clock, 'clock', true)
-		PreserveWidgetMethods(clock)
-		HookWidgetPosition(clock)
-		AnchorStoredWidget(clock, 'clock')
-		if clock.Show then
-			clock:Show()
+	-- Forever's native queue eye anchors to the Minimap by itself and appears only while
+	-- queued. Clicking it from addon code would taint its leave-queue menu, so leave it alone.
+	if not IS_FOREVER then
+		local lfg = GetLFGFrame()
+		EnsureLFGProxy()
+		UpdateLFGProxy()
+		if lfgProxyButton then
+			if not IsAddonButtonAlignmentEnabled() then
+				lfgProxyButton:RegisterForDrag('LeftButton')
+				AnchorProxy(lfgProxyButton, 'lfg')
+			end
+
+			lfgProxyButton:Show()
+		end
+
+		if lfg then
+			PreserveWidgetMethods(lfg)
+			HookWidgetPosition(lfg)
+			if lfg.SetAlpha then
+				lfg:SetAlpha(0)
+			end
 		end
 	end
+
+	ApplyForeverAddonCompartmentLayout()
+	DayNightIndicator.EnableDragging()
+	DayNightIndicator.ApplyLayout()
+	ApplyAddonButtonLayout()
+	HideBlizzardClocks()
 
 	local mail = GetMailFrame()
 	if mail then
+		-- Forever's mail frame calls GetParent():Layout() on UPDATE_PENDING_MAIL. It is about
+		-- to be parented to the Minimap, which has no Layout method and would raise an error.
+		local mailParent = mail.GetParent and mail:GetParent()
+		if mailParent and mailParent.Layout and not Minimap.Layout then
+			Minimap.Layout = Noop
+		end
+
 		MakeWidgetDraggable(mail, 'mail', true)
 		PreserveWidgetMethods(mail)
 		HookWidgetPosition(mail)
@@ -2049,6 +2455,12 @@ local function AnchorAddonMinimapButton()
 		return
 	end
 
+	if IsAddonButtonAlignmentEnabled() then
+		ApplyAddonButtonLayout()
+		return
+	end
+
+	addonMinimapButton:RegisterForDrag('LeftButton')
 	PositionButtonOnSquareEdge(
 		addonMinimapButton,
 		GetAddonButtonAngle(),
@@ -2089,8 +2501,8 @@ local function UpdateAddonButtonVisibility()
 		return
 	end
 
-	AnchorAddonMinimapButton()
 	addonMinimapButton:Show()
+	AnchorAddonMinimapButton()
 end
 
 local function EnsureAddonMinimapButton()
@@ -2137,6 +2549,9 @@ local function EnsureAddonMinimapButton()
 	end)
 	button:SetScript('OnMouseUp', function(self)
 		SetProxyButtonPressed(self, false)
+		if IsAddonButtonAlignmentEnabled() then
+			NormalizeAddonButton(self)
+		end
 	end)
 	button:SetScript('OnClick', function(self, mouseButton)
 		if self.__ProkinSuppressClick then
@@ -2151,7 +2566,7 @@ local function EnsureAddonMinimapButton()
 		end
 	end)
 	button:SetScript('OnDragStart', function(self)
-		if not IsAltKeyDown() then
+		if not IsAltKeyDown() or IsAddonButtonAlignmentEnabled() then
 			return
 		end
 
@@ -2164,7 +2579,10 @@ local function EnsureAddonMinimapButton()
 		GameTooltip:AddLine('Prokin Minimap', 1, 1, 1)
 		GameTooltip:AddLine('Left-Click: Start a role check', 0.85, 0.85, 0.85)
 		GameTooltip:AddLine('Right-Click: Open options', 0.85, 0.85, 0.85)
-		GameTooltip:AddLine('Alt-Left-Drag: Move button', 0.85, 0.85, 0.85)
+		if not IsAddonButtonAlignmentEnabled() then
+			GameTooltip:AddLine('Alt-Left-Drag: Move button', 0.85, 0.85, 0.85)
+		end
+		-- Only add colorized gold tracker lines, avoid duplicates
 		AddGoldTrackerTooltipLine(GameTooltip)
 		AddGroupRoleTooltipLines(GameTooltip)
 		GameTooltip:Show()
@@ -2223,6 +2641,12 @@ RefreshMinimap = function()
 	ApplyHybridMinimap()
 	InstallAutoMarkAssistCompatibility()
 	ApplyAutoMarkAssistCompatibility()
+end
+
+local function SetZoneTextSize(size)
+	GetDatabase().zoneTextSize = NormalizeZoneTextSize(size)
+	RefreshMinimap()
+	return GetZoneTextSize()
 end
 
 SetMinimapSize = function(size)
@@ -2302,7 +2726,22 @@ local function SyncOptionsWindow()
 	optionsFrame.sizeSlider.__ProkinSyncing = nil
 	optionsFrame.sizeSlider.valueText:SetText(string.format('%d', db.size))
 
+	local zoneTextSize = GetZoneTextSize()
+	optionsFrame.zoneTextSlider.__ProkinSyncing = true
+	optionsFrame.zoneTextSlider:SetValue(zoneTextSize)
+	optionsFrame.zoneTextSlider.__ProkinSyncing = nil
+	optionsFrame.zoneTextSlider.valueText:SetText(string.format('%d', zoneTextSize))
+
 	optionsFrame.showAddonButton:SetChecked(db.showAddonButton ~= false)
+	optionsFrame.alignAddonButtons:SetChecked(db.alignAddonButtons ~= false)
+
+	local spacingSlider = optionsFrame.addonSpacingSlider
+	spacingSlider.__ProkinSyncing = true
+	spacingSlider:SetValue(db.addonButtonSpacing)
+	spacingSlider.__ProkinSyncing = nil
+	spacingSlider.valueText:SetText(string.format('%d', db.addonButtonSpacing))
+	spacingSlider:SetEnabled(db.alignAddonButtons ~= false)
+	optionsFrame.resetAddonSpacingButton:SetEnabled(db.alignAddonButtons ~= false)
 	optionsFrame.showServerTime:SetChecked(db.showServerTime ~= false)
 	optionsFrame.showMinimapBorder:SetChecked(db.showMinimapBorder ~= false)
 	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
@@ -2324,7 +2763,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(440, 500)
+	frame:SetSize(440, 658)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -2450,8 +2889,96 @@ local function EnsureOptionsWindow()
 		UpdateAddonButtonVisibility()
 	end)
 
+	-- Builds a labelled slider with a value readout and a reset button.
+	local function CreateLabelledSlider(label, name, minValue, maxValue, onValueChanged, onReset)
+		local slider = CreateFrame('Slider', name, frame, BackdropTemplateMixin and 'BackdropTemplate' or nil)
+		slider:SetOrientation('HORIZONTAL')
+		slider:SetPoint('TOPLEFT', label, 'BOTTOMLEFT', 14, -10)
+		slider:SetWidth(220)
+		slider:SetHeight(15)
+		slider:SetHitRectInsets(0, 0, -10, 0)
+		slider:SetBackdrop(OPTION_SLIDER_BACKDROP)
+		slider:SetThumbTexture([[Interface\Buttons\UI-SliderBar-Button-Horizontal]])
+		slider:SetMinMaxValues(minValue, maxValue)
+		slider:SetValueStep(1)
+		if slider.SetObeyStepOnDrag then
+			slider:SetObeyStepOnDrag(true)
+		end
+
+		slider.fill = slider:CreateTexture(nil, 'BACKGROUND')
+		slider.fill:SetColorTexture(0.85, 0.72, 0.12, 1)
+		slider.fill:SetPoint('LEFT', slider, 'LEFT', 3, 0)
+		slider.fill:SetHeight(9)
+
+		slider.lowText = frame:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
+		slider.lowText:SetPoint('TOPLEFT', slider, 'BOTTOMLEFT', 2, 3)
+		slider.lowText:SetText(tostring(minValue))
+
+		slider.highText = frame:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
+		slider.highText:SetPoint('TOPRIGHT', slider, 'BOTTOMRIGHT', -2, 3)
+		slider.highText:SetText(tostring(maxValue))
+
+		slider.valueText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+		slider.valueText:SetPoint('LEFT', slider, 'RIGHT', 14, 0)
+
+		slider:SetScript('OnValueChanged', function(self, value)
+			local rounded = math.floor(value + 0.5)
+			UpdateOptionsSliderVisuals(self, rounded)
+			self.valueText:SetText(string.format('%d', rounded))
+			if not self.__ProkinSyncing then
+				onValueChanged(rounded)
+			end
+		end)
+
+		local resetButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+		resetButton:SetSize(70, 22)
+		resetButton:SetPoint('LEFT', slider, 'RIGHT', 44, 0)
+		resetButton:SetText('Reset')
+		resetButton:SetScript('OnClick', function()
+			onReset()
+			SyncOptionsWindow()
+		end)
+
+		return slider, resetButton
+	end
+
+	frame.zoneTextLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	frame.zoneTextLabel:SetPoint('TOPLEFT', frame.resetSizeButton, 'BOTTOMLEFT', 0, -14)
+	frame.zoneTextLabel:SetText('Zone Text Size')
+
+	frame.zoneTextSlider, frame.resetZoneTextButton = CreateLabelledSlider(
+		frame.zoneTextLabel,
+		'ProkinMinimapOptionsZoneTextSlider',
+		MIN_ZONE_TEXT_SIZE,
+		MAX_ZONE_TEXT_SIZE,
+		SetZoneTextSize,
+		function()
+			SetZoneTextSize(nil)
+		end
+	)
+
+	frame.addonSpacingLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	frame.addonSpacingLabel:SetPoint('TOPLEFT', frame.zoneTextLabel, 'BOTTOMLEFT', 0, -48)
+	frame.addonSpacingLabel:SetText('Addon Icon Spacing')
+
+	local function SetAddonButtonSpacing(spacing)
+		GetDatabase().addonButtonSpacing = spacing
+		RefreshMinimap()
+	end
+
+	frame.addonSpacingSlider, frame.resetAddonSpacingButton = CreateLabelledSlider(
+		frame.addonSpacingLabel,
+		'ProkinMinimapOptionsAddonSpacingSlider',
+		ALIGNED_BUTTON.MIN_SPACING,
+		ALIGNED_BUTTON.MAX_SPACING,
+		SetAddonButtonSpacing,
+		function()
+			SetAddonButtonSpacing(ALIGNED_BUTTON.SPACING)
+		end
+	)
+
 	frame.showAddonButton = CreateOptionsCheckbox(frame, 'Show Prokin minimap button', 'Show or hide the Prokin minimap button around the square minimap border.')
-	frame.showAddonButton:SetPoint('TOPLEFT', frame.resetSizeButton, 'BOTTOMLEFT', 0, -14)
+	frame.showAddonButton:SetPoint('TOPLEFT', frame.addonSpacingLabel, 'BOTTOMLEFT', 0, -48)
 	frame.showAddonButton:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showAddonButton = self:GetChecked() and true or false
@@ -2459,7 +2986,19 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showServerTime = CreateOptionsCheckbox(frame, 'Show server time in the zone label', 'Append the server time to the custom zone text shown above the minimap.')
-	frame.showServerTime:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -8)
+	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin button, LibDBIcon addon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. These cannot be dragged while this is on.')
+	frame.alignAddonButtons:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -8)
+	frame.alignAddonButtons:SetScript('OnClick', function(self)
+		local enabled = self:GetChecked() and true or false
+		ApplyOptionChange(function(db)
+			db.alignAddonButtons = enabled
+		end)
+		if not enabled then
+			Print('Type /reload to return other addons\' buttons to their saved positions.')
+		end
+	end)
+
+	frame.showServerTime:SetPoint('TOPLEFT', frame.alignAddonButtons, 'BOTTOMLEFT', 0, -8)
 	frame.showServerTime:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showServerTime = self:GetChecked() and true or false
@@ -2501,7 +3040,7 @@ local function EnsureOptionsWindow()
 	frame.helpText:SetPoint('TOPLEFT', frame.enableGoldTracking, 'BOTTOMLEFT', 4, -14)
 	frame.helpText:SetWidth(392)
 	frame.helpText:SetJustifyH('LEFT')
-	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
+	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button when alignment is off.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
 	frame.helpText:SetHeight(58)
 
 	frame:SetScript('OnShow', SyncOptionsWindow)
@@ -2516,7 +3055,7 @@ OpenOptionsWindow = function()
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -2554,6 +3093,27 @@ local function HandleSlashCommand(message)
 	if command == 'reset' or command == 'default' then
 		local size = SetMinimapSize(DEFAULT_SIZE)
 		Print(string.format('Minimap size reset to %dx%d.', size, size))
+		return
+	end
+
+	if command == 'resetmoon' then
+		GetDatabase().dayNightPosition = nil
+		DayNightIndicator.ApplyLayout()
+		Print('Day/night icon position reset.')
+		return
+	end
+
+	if command == 'zonetext' then
+		local value = string.lower(remainder or '')
+		if value == 'reset' or value == 'default' then
+			Print(string.format('Zone text size reset to %d.', SetZoneTextSize(nil)))
+		elseif NormalizeZoneTextSize(value) then
+			Print(string.format('Zone text size set to %d.', SetZoneTextSize(value)))
+		else
+			Print(string.format('Enter a size between %d and %d, for example: /pkm zonetext 14', MIN_ZONE_TEXT_SIZE, MAX_ZONE_TEXT_SIZE))
+		end
+
+		SyncOptionsWindow()
 		return
 	end
 
@@ -2654,6 +3214,13 @@ local function InstallHooks()
 	end
 
 	if _G.MinimapCluster then
+		-- Forever restores its round mask here when the rotateMinimap setting changes.
+		if type(_G.MinimapCluster.UpdateMinimapConfig) == 'function' then
+			hooksecurefunc(_G.MinimapCluster, 'UpdateMinimapConfig', function()
+				RefreshMinimap()
+			end)
+		end
+
 		if _G.MinimapCluster.ZoneTextButton and _G.MinimapCluster.ZoneTextButton.HookScript then
 			_G.MinimapCluster.ZoneTextButton:HookScript('OnShow', HideDefaultZoneHeader)
 		end
@@ -2727,6 +3294,7 @@ end)
 eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	UpdateWidgetDrag()
 	UpdateAddonButtonDrag()
+	DayNightIndicator.UpdateDrag()
 
 	if loadAnnouncementPending then
 		loadAnnouncementDelay = math.max((loadAnnouncementDelay or 0) - elapsed, 0)

@@ -1,8 +1,8 @@
-## Interface: 20505
+## Interface: 20506, 16001
 ## Title: Prokin-Minimap
-## Notes: Squares the minimap for The Burning Crusade Anniversary using the ElvUI mask method.
+## Notes: Squares the minimap for The Burning Crusade Anniversary and World of Warcraft: Forever using the ElvUI mask method.
 ## Author: Prokin
-## Version: 1.0.33
+## Version: 1.0.36
 ## SavedVariables: ProkinMinimapDB
 ## IconTexture: Interface\AddOns\Prokin-Minimap\Media\ProkinFaceIcon.png
 

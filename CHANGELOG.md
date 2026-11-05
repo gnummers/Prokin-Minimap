@@ -1,3 +1,21 @@
+## v1.0.36
+- Added World of Warcraft: Forever support (TOC `16001`) alongside The Burning Crusade Anniversary
+- Updated the Anniversary TOC to `20506` for patch 2.5.6
+- Removed the clock below the minimap; the zone label still shows the time
+- Pinned Blizzard's player coordinates directly under the minimap and centered them
+- With icon alignment off, Forever's day/night icon can be left-dragged anywhere on the map; `/pkm resetmoon` restores it to the top-right corner
+- Addon minimap buttons now share one size and line up along the left border, with an option to turn this off
+- Added an Addon Icon Spacing slider to the options window to move those icons closer together or further apart
+- The Blizzard tracking button and Forever's day/night icon now match the addon icon size, and join the left-border column and its spacing slider
+- Added a zone text size setting in the options window and `/pkm zonetext <number|reset>`
+- Updated tracking, item info, and addon-loading calls to the namespaced APIs Forever requires
+- Fixed a Lua error on new mail, an invisible mail icon, and the round mask returning when map rotation changes on Forever
+- Moved the Forever zoom buttons and addon compartment onto the square minimap
+- Forever uses its native queue eye, which appears only while queued, instead of the LFG proxy button
+- Handled secret values in the role tooltip, character ledger, and loot message parsing
+- Fixed a Lua error when a loot message mentioned disenchanting
+- Stopped replacing the global `GetRepairAllCost`, which could taint the merchant repair UI
+
 ## v1.0.34
 - Tooltip and gold tracking now display negative values for net loss (e.g., after repairs or expenses)
 

@@ -14,6 +14,16 @@ local mailHooksInstalled
 local VALUE_PRICE_SOURCE = 'dbmarket'
 local dailyResetElapsed = 0
 local lastMailCost = 0
+local QueueInventoryScan
+local characterKey
+
+-- Forever moved GetItemInfo into C_Item and removed the global.
+local GetItemInfoCompat = (type(C_Item) == 'table' and C_Item.GetItemInfo) or GetItemInfo
+
+-- Secret values (Forever) cannot be compared, tested, or searched by addon code.
+local function IsSecret(value)
+	return type(issecretvalue) == 'function' and issecretvalue(value)
+end
 
 local function GetTrackerDB()
 	if type(ProkinMinimapDB) ~= 'table' then
@@ -34,16 +44,22 @@ end
 
 local function GetCharacterKey()
 	local name, realm = UnitName('player')
+	if IsSecret(name) or IsSecret(realm) then
+		return characterKey or 'unknown'
+	end
+
 	if not name or name == '' then
 		return 'unknown'
 	end
 
 	realm = realm or GetRealmName() or ''
 	if realm ~= '' then
-		return name .. '-' .. realm
+		characterKey = name .. '-' .. realm
+	else
+		characterKey = name
 	end
 
-	return name
+	return characterKey
 end
 
 local function GetCharacterState()
@@ -228,7 +244,7 @@ local function GetTrackedItemLink(itemRef)
 	end
 
 	if type(itemRef) == 'number' then
-		return select(2, GetItemInfo(itemRef))
+		return select(2, GetItemInfoCompat(itemRef))
 	end
 
 	return nil
@@ -252,7 +268,7 @@ local function GetTrackedItemValue(itemRef)
 		return nil
 	end
 
-	local _, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemLink)
+	local _, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfoCompat(itemLink)
 	if quality == 0 then
 		return sellPrice
 	end
@@ -268,7 +284,7 @@ local function GetTrackedItemValue(itemRef)
 end
 
 local function ProcessLootMessage(message)
-	if not IsGoldTrackingEnabled() then
+	if not IsGoldTrackingEnabled() or IsSecret(message) then
 		return
 	end
 
@@ -416,7 +432,7 @@ local function ApplyInventorySnapshot()
 	trackedInventoryCounts = currentCounts
 end
 
-local function QueueInventoryScan()
+QueueInventoryScan = function()
 	pendingInventoryScanAt = GetTime()
 end
 
@@ -463,13 +479,6 @@ local function InstallMailHooks()
 		hooksecurefunc('RepairAllItems', function()
 			UpdateMoneySnapshot()
 		end)
-	end
-
-	if type(GetRepairAllCost) == 'function' then
-		local originalGetRepairAllCost = GetRepairAllCost
-		function GetRepairAllCost()
-			return originalGetRepairAllCost()
-		end
 	end
 
 	mailHooksInstalled = true
