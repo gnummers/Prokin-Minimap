@@ -20,6 +20,10 @@ end
 
 local function GetCharacterKey()
 	local name, realm = UnitName('player')
+	if type(issecretvalue) == 'function' and (issecretvalue(name) or issecretvalue(realm)) then
+		return 'unknown'
+	end
+
 	if not name or name == '' then
 		return 'unknown'
 	end

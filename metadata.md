@@ -4,8 +4,8 @@
 
 - **Name:** Prokin-Minimap
 - **Game:** World of Warcraft
-- **Compatibility:** The Burning Crusade Anniversary / TBC Classic
-- **Interface Version:** 20505
+- **Compatibility:** The Burning Crusade Anniversary / TBC Classic, World of Warcraft: Forever
+- **Interface Version:** 20506, 16001
 - **Class:** Addons
 - **Main Category:** Map & Minimap
 - **Additional Categories:** UI
@@ -48,6 +48,8 @@ Slash commands:
 - `/pkm smaller`
 - `/pkm smaller 50`
 - `/pkm reset`
+- `/pkm zonetext <number|reset>`
+- `/pkm resetmoon`
 - `/pkm options`
 
 Saved variable:
