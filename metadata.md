@@ -9,16 +9,16 @@
 - **Class:** Addons
 - **Main Category:** Map & Minimap
 - **Additional Categories:** UI
-- **License:** All Rights Reserved
+- **License:** GNU Affero General Public License version 3 (AGPLv3)
 - **Repository:** https://github.com/gnummers/Prokin-Minimap
 
 ## Summary
 
-Square minimap addon for The Burning Crusade Anniversary with ElvUI-style masking, persistent resizing, a Prokin minimap button with role tools, an in-game options window, polished header handling, and compatibility shims for minimap buttons, Blizzard widgets, and MinimapButtonButton.
+Square minimap addon for The Burning Crusade Anniversary and World of Warcraft: Forever with ElvUI-style masking, persistent resizing, a Prokin minimap button with role tools, an in-game options window, polished header handling, and compatibility shims for minimap buttons, Blizzard widgets, and MinimapButtonButton.
 
 ## Description
 
-Prokin-Minimap is a lightweight World of Warcraft addon for The Burning Crusade Anniversary that replaces the default round minimap with a square one using the same mask approach ElvUI uses on TBC.
+Prokin-Minimap is a lightweight World of Warcraft addon for The Burning Crusade Anniversary and World of Warcraft: Forever that replaces the default round minimap with a square one using the same mask approach ElvUI uses on TBC.
 
 Features:
 
