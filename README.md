@@ -122,3 +122,7 @@ The addon stores its settings in:
 ## Repository
 
 GitHub: <https://github.com/gnummers/Prokin-Minimap>
+
+## License
+
+Licensed under the GNU Affero General Public License version 3 (AGPLv3). See [LICENSE](LICENSE).

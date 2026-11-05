@@ -9,7 +9,7 @@
 - **Class:** Addons
 - **Main Category:** Map & Minimap
 - **Additional Categories:** UI
-- **License:** All Rights Reserved
+- **License:** GNU Affero General Public License version 3 (AGPLv3)
 - **Repository:** https://github.com/gnummers/Prokin-Minimap
 
 ## Summary
