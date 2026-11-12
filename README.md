@@ -26,6 +26,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Resizable zone text, from the options window or `/pkm zonetext`
 - With icon alignment off, lets you left-drag the Forever day/night icon anywhere on the minimap
 - Lets you move Blizzard's buff icons, with debuffs following underneath, from the options window or `/pkm buffs`
+- Experimental WoW Forever layer display in the bottom-right corner of the minimap, read from NPC data and shared with AutoLayer. This is not an official layer number
 - Saved minimap size with a default of **400x400**
 
 ## Compatibility
@@ -55,6 +56,8 @@ On Forever, Blizzard's native queue eye replaces the LFG proxy button, so it app
 - `/pkm zonetext reset` - restore the default zone text size
 - `/pkm buffs` - unlock or lock the buff icons, then drag the blue box to move them
 - `/pkm buffs reset` - clear the saved buff position, then `/reload` to restore Blizzard's position
+- `/pkm layer` - show the experimental Forever layer details, or `/pkm layer reset` to clear it
+- `/pkm hop` - send an AutoLayer request for any layer, even when your current layer is known. Left-clicking the layer display does the same, and right-clicking it opens the AutoLayer Hopper
 - `/pkm resetmoon` - restore the default position of the Forever day/night icon when icon alignment is off
 - `/pkm options` - open the Prokin Minimap options window
 
