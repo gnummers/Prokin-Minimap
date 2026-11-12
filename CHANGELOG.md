@@ -1,3 +1,8 @@
+## v1.0.39
+- Added an experimental layer display for WoW Forever in the bottom-right corner of the minimap, read from NPC data after two NPCs agree. It also shares the layer with AutoLayer, and can be turned off in options. `/pkm layer` shows details
+- Fills AutoLayer's Hopper layer list without Nova World Buffs, using the highest copy seen in each zone over the last 12 hours
+- Added an any-layer AutoLayer request, even when the current layer is known: left-click the layer display or type `/pkm hop`. Right-click the layer display opens the AutoLayer Hopper
+
 ## v1.0.38
 - Fixed addon icons breaking out of the left-border column on minimaps smaller than 400. Icons now tighten to fit, and any that still don't fit start a new column outside the map
 - Fixed invisible addon buttons leaving gaps in the left-border column. Show-on-hover buttons now go after the always-visible icons

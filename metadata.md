@@ -50,6 +50,8 @@ Slash commands:
 - `/pkm reset`
 - `/pkm zonetext <number|reset>`
 - `/pkm buffs [unlock|lock|reset]`
+- `/pkm layer [reset]`
+- `/pkm hop`
 - `/pkm resetmoon`
 - `/pkm options`
 

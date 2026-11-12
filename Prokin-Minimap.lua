@@ -316,6 +316,9 @@ GetDatabase = function()
 		ProkinMinimapDB.alignAddonButtons = true
 	end
 	ProkinMinimapDB.zoneTextSize = NormalizeZoneTextSize(ProkinMinimapDB.zoneTextSize)
+	if type(ProkinMinimapDB.showLayer) ~= 'boolean' then
+		ProkinMinimapDB.showLayer = true
+	end
 	local addonButtonSpacing = math.floor((tonumber(ProkinMinimapDB.addonButtonSpacing) or ALIGNED_BUTTON.SPACING) + 0.5)
 	ProkinMinimapDB.addonButtonSpacing = math.max(ALIGNED_BUTTON.MIN_SPACING, math.min(addonButtonSpacing, ALIGNED_BUTTON.MAX_SPACING))
 	local buffFramePosition = ProkinMinimapDB.buffFramePosition
@@ -2293,6 +2296,326 @@ function BuffIcons.Reset()
 	Print('Buff icon position cleared. Type /reload to return them to Blizzard\'s position.')
 end
 
+-- Experimental Forever layer display. Forever creature GUIDs read
+-- Creature-0-server-instance-zoneUID-npcID-spawnUID. Blizzard obfuscates the server and spawn
+-- fields, but the zone field is a small number that appears to identify the zone copy, which is
+-- shown as the layer. It is only trusted once two different NPCs agree, and goes stale after two
+-- minutes or when joining or leaving a group. NWB turns its own detection off on Forever, so this
+-- publishes NWB's layer globals there for AutoLayer, which reads them.
+local ForeverLayer = { STALE_AFTER = 120, FORGET_AFTER = 12 * 3600 }
+
+if IS_FOREVER and _G.NWB_CurrentLayer == nil then
+	NWB_CurrentLayer = 0
+	NWB_CurrentLayerZoneID = 0
+end
+
+function ForeverLayer.IsEnabled()
+	return IS_FOREVER and GetDatabase().showLayer ~= false
+end
+
+function ForeverLayer.Reset()
+	ForeverLayer.current = nil
+	ForeverLayer.Update()
+end
+
+function ForeverLayer.Observe(unit)
+	if not ForeverLayer.IsEnabled() or IsInInstance() then
+		return
+	end
+
+	local guid = UnitGUID(unit)
+	if IsSecret(guid) or type(guid) ~= 'string' then
+		return
+	end
+
+	local instance, zoneCopy = guid:match('^Creature%-%d+%-%d+%-(%d+)%-(%d+)%-%d+%-%x+$')
+	zoneCopy = tonumber(zoneCopy)
+	if not zoneCopy or zoneCopy < 1 then
+		return
+	end
+
+	local controlled, pet = UnitPlayerControlled(unit), UnitIsOtherPlayersPet(unit)
+	if IsSecret(controlled) or controlled or IsSecret(pet) or pet then
+		return
+	end
+
+	local zone = C_Map.GetBestMapForUnit('player')
+	if IsSecret(zone) or type(zone) ~= 'number' then
+		return
+	end
+
+	local key = instance .. ':' .. zoneCopy
+	local current = ForeverLayer.current
+	if not current or current.key ~= key or current.zone ~= zone then
+		ForeverLayer.current = { key = key, zone = zone, layer = zoneCopy, firstGUID = guid, stamp = GetTime() }
+	else
+		current.stamp = GetTime()
+		if guid ~= current.firstGUID then
+			current.confirmed = true
+			ForeverLayer.RecordCopy(zone, zoneCopy)
+		end
+	end
+
+	ForeverLayer.Update()
+end
+
+-- Remembers the highest confirmed copy in each zone for 12 hours. Copy numbers come straight
+-- from the game, so seeing copy 4 implies copies 1 to 4 exist.
+function ForeverLayer.GetCopyStore()
+	local db = GetDatabase()
+	if type(db.layerCopies) ~= 'table' then
+		db.layerCopies = {}
+	end
+
+	local realm = GetRealmName()
+	if IsSecret(realm) or type(realm) ~= 'string' then
+		return nil
+	end
+
+	if type(db.layerCopies[realm]) ~= 'table' then
+		db.layerCopies[realm] = {}
+	end
+
+	local store = db.layerCopies[realm]
+	local now = GetServerTime()
+	for zone, entry in pairs(store) do
+		if type(entry) ~= 'table' or type(entry.highest) ~= 'number' or type(entry.seen) ~= 'number' or (now - entry.seen) > ForeverLayer.FORGET_AFTER then
+			store[zone] = nil
+		end
+	end
+	return store
+end
+
+function ForeverLayer.RecordCopy(zone, copy)
+	local store = ForeverLayer.GetCopyStore()
+	if not store then
+		return
+	end
+
+	local entry = store[tostring(zone)]
+	if not entry then
+		entry = { highest = copy }
+		store[tostring(zone)] = entry
+	end
+	entry.highest = math.max(entry.highest, copy)
+	entry.seen = GetServerTime()
+end
+
+function ForeverLayer.GetHighestCopy(zone)
+	local store = ForeverLayer.GetCopyStore()
+	local entry = store and store[tostring(zone)]
+	return entry and entry.highest or 0
+end
+
+-- AutoLayer's Hopper lists layers 1 to N, where N counts NWB's saved layer entries, so without
+-- NWB its list is empty. When NWB is not installed, a stand-in NWBdatabase holds one entry per
+-- copy known in the current zone. It is never saved, and NWB's real data is never touched.
+function ForeverLayer.UpdateLayerList(zone)
+	if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('NovaWorldBuffs') then
+		return
+	end
+
+	if _G.NWBdatabase ~= nil and _G.NWBdatabase ~= ForeverLayer.layerDatabase then
+		return
+	end
+
+	local realm, faction = GetRealmName(), UnitFactionGroup('player')
+	if IsSecret(realm) or IsSecret(faction) or type(realm) ~= 'string' or type(faction) ~= 'string' then
+		return
+	end
+
+	local highest = zone and ForeverLayer.GetHighestCopy(zone) or 0
+	if ForeverLayer.layerDatabase and ForeverLayer.listedHighest == highest then
+		return
+	end
+
+	local copies = {}
+	for copy = 1, highest do
+		copies[copy] = {}
+	end
+
+	-- AutoLayer picks storage 1 for Azeroth and 2 for Outland.
+	ForeverLayer.layerDatabase = { global = { [realm] = { [faction] = { layers = { [1] = copies, [2] = copies } } } } }
+	ForeverLayer.listedHighest = highest
+	NWBdatabase = ForeverLayer.layerDatabase
+end
+
+-- Returns layer, state: 'confirmed', 'checking', 'stale' or 'unknown'.
+function ForeverLayer.GetState()
+	local current = ForeverLayer.current
+	if not current then
+		return nil, 'unknown'
+	end
+
+	local zone = C_Map.GetBestMapForUnit('player')
+	if (GetTime() - current.stamp) > ForeverLayer.STALE_AFTER or IsSecret(zone) or zone ~= current.zone then
+		return current.layer, 'stale'
+	end
+
+	return current.layer, current.confirmed and 'confirmed' or 'checking'
+end
+
+function ForeverLayer.GetAutoLayer()
+	local autoLayer = _G.AutoLayer
+	if type(autoLayer) == 'table' and type(autoLayer.SlashCommandRequest) == 'function' then
+		return autoLayer
+	end
+end
+
+-- AutoLayer turns an empty request into "every layer except the current one" whenever it knows
+-- the current layer. Reporting the layer as unknown for the duration of the call makes it send a
+-- true any-layer request, which every AutoLayer helper can answer. AutoLayer itself is unchanged.
+function ForeverLayer.RequestAnyLayer()
+	local autoLayer = ForeverLayer.GetAutoLayer()
+	if not autoLayer then
+		Print('AutoLayer is not installed or not loaded.')
+		return
+	end
+
+	local knownLayer = NWB_CurrentLayer
+	NWB_CurrentLayer = 0
+	local ok = pcall(autoLayer.SlashCommandRequest, autoLayer, '')
+	NWB_CurrentLayer = knownLayer
+	if not ok then
+		Print('AutoLayer could not send the request.')
+	end
+end
+
+function ForeverLayer.OpenHopper()
+	local autoLayer = ForeverLayer.GetAutoLayer()
+	if autoLayer and type(autoLayer.HopGUI) == 'function' then
+		autoLayer:HopGUI()
+	else
+		Print('AutoLayer is not installed or not loaded.')
+	end
+end
+
+function ForeverLayer.EnsureDisplay()
+	if ForeverLayer.display or not Minimap then
+		return ForeverLayer.display
+	end
+
+	local display = CreateFrame('Frame', 'ProkinMinimapLayerDisplay', Minimap)
+	display:SetSize(70, 16)
+	display:SetFrameLevel(Minimap:GetFrameLevel() + 20)
+	display:EnableMouse(true)
+	display.text = display:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	display.text:SetPoint('RIGHT', display, 'RIGHT', 0, 0)
+	display.text:SetJustifyH('RIGHT')
+
+	display:SetScript('OnEnter', function(self)
+		local layer, state = ForeverLayer.GetState()
+		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+		GameTooltip:AddLine('Layer (experimental)', 1, 1, 1)
+		if state == 'unknown' then
+			GameTooltip:AddLine('Hover over or target two different NPCs to find your layer.', 0.85, 0.85, 0.85, true)
+		elseif state == 'checking' then
+			GameTooltip:AddLine('Seen on one NPC. Hover over a second NPC to confirm.', 0.85, 0.85, 0.85, true)
+		elseif state == 'stale' then
+			GameTooltip:AddLine('Out of date. Hover over two NPCs to refresh.', 0.85, 0.85, 0.85, true)
+		end
+		if layer then
+			GameTooltip:AddLine('Zone copy: ' .. ForeverLayer.current.key, 0.6, 0.6, 0.6)
+		end
+		GameTooltip:AddLine('Read from NPC data, not an official layer number.', 0.6, 0.6, 0.6, true)
+		if ForeverLayer.GetAutoLayer() then
+			GameTooltip:AddLine(' ')
+			GameTooltip:AddLine('Left-Click: Request any layer (AutoLayer)', 0.85, 0.85, 0.85)
+			GameTooltip:AddLine('Right-Click: Open the AutoLayer Hopper', 0.85, 0.85, 0.85)
+		end
+		GameTooltip:Show()
+	end)
+	display:SetScript('OnLeave', GameTooltip_Hide)
+	display:SetScript('OnMouseUp', function(_, mouseButton)
+		if mouseButton == 'LeftButton' then
+			ForeverLayer.RequestAnyLayer()
+		elseif mouseButton == 'RightButton' then
+			ForeverLayer.OpenHopper()
+		end
+	end)
+
+	ForeverLayer.display = display
+	return display
+end
+
+function ForeverLayer.Update()
+	if not IS_FOREVER then
+		return
+	end
+
+	local layer, state = ForeverLayer.GetState()
+	local published = state == 'confirmed' and layer or 0
+	NWB_CurrentLayer = published
+	NWB_CurrentLayerZoneID = published > 0 and ForeverLayer.current.zone or 0
+
+	local zone = C_Map.GetBestMapForUnit('player')
+	ForeverLayer.UpdateLayerList(not IsSecret(zone) and zone or nil)
+
+	local display = ForeverLayer.display
+	if not display then
+		return
+	end
+
+	if state == 'confirmed' then
+		display.text:SetText('Layer ' .. layer)
+		display.text:SetTextColor(0.2, 1, 0.2)
+	elseif state == 'checking' then
+		display.text:SetText('Layer ' .. layer .. '?')
+		display.text:SetTextColor(1, 0.82, 0)
+	elseif state == 'stale' then
+		display.text:SetText('Layer ' .. layer .. '?')
+		display.text:SetTextColor(0.6, 0.6, 0.6)
+	else
+		display.text:SetText('Layer ?')
+		display.text:SetTextColor(0.6, 0.6, 0.6)
+	end
+end
+
+-- The zoom buttons sit in the bottom-right corner on Forever, so leave room for them.
+function ForeverLayer.ApplyLayout()
+	if not ForeverLayer.IsEnabled() then
+		if ForeverLayer.display then
+			ForeverLayer.display:Hide()
+		end
+		return
+	end
+
+	local display = ForeverLayer.EnsureDisplay()
+	if not display then
+		return
+	end
+
+	display:ClearAllPoints()
+	display:SetPoint('BOTTOMRIGHT', Minimap, 'BOTTOMRIGHT', -26, 4)
+	display:Show()
+	ForeverLayer.Update()
+end
+
+if IS_FOREVER then
+	local layerEvents = CreateFrame('Frame')
+	for _, event in ipairs({ 'PLAYER_TARGET_CHANGED', 'UPDATE_MOUSEOVER_UNIT', 'NAME_PLATE_UNIT_ADDED', 'GROUP_ROSTER_UPDATE', 'PLAYER_ENTERING_WORLD' }) do
+		layerEvents:RegisterEvent(event)
+	end
+	layerEvents:SetScript('OnEvent', function(_, event, unit)
+		if event == 'PLAYER_TARGET_CHANGED' then
+			ForeverLayer.Observe('target')
+		elseif event == 'UPDATE_MOUSEOVER_UNIT' then
+			ForeverLayer.Observe('mouseover')
+		elseif event == 'NAME_PLATE_UNIT_ADDED' then
+			if not IsSecret(unit) and type(unit) == 'string' then
+				ForeverLayer.Observe(unit)
+			end
+		else
+			-- Joining or leaving a group can move the player to another layer.
+			local inGroup = IsInGroup()
+			if event == 'PLAYER_ENTERING_WORLD' or inGroup ~= ForeverLayer.wasInGroup then
+				ForeverLayer.wasInGroup = inGroup
+				ForeverLayer.Reset()
+			end
+		end
+	end)
+end
+
 local function IsAddonButtonAlignmentEnabled()
 	return GetDatabase().alignAddonButtons ~= false
 end
@@ -2506,6 +2829,7 @@ ApplyBlizzardWidgetLayout = function()
 
 	ApplyForeverAddonCompartmentLayout()
 	BuffIcons.ApplyLayout()
+	ForeverLayer.ApplyLayout()
 	DayNightIndicator.EnableDragging()
 	DayNightIndicator.ApplyLayout()
 	ApplyAddonButtonLayout()
@@ -2914,6 +3238,8 @@ local function SyncOptionsWindow()
 	optionsFrame.showMinimapBorder:SetChecked(db.showMinimapBorder ~= false)
 	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
 	optionsFrame.enableGoldTracking:SetChecked(db.goldTracker and db.goldTracker.goldTrackingEnabled ~= false)
+	optionsFrame.showLayer:SetChecked(db.showLayer ~= false)
+	optionsFrame.showLayer:SetEnabled(IS_FOREVER)
 end
 
 local function ApplyOptionChange(callback)
@@ -2931,7 +3257,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(440, 690)
+	frame:SetSize(440, 722)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -3222,7 +3548,18 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.helpText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	frame.helpText:SetPoint('TOPLEFT', frame.enableGoldTracking, 'BOTTOMLEFT', 4, -14)
+	frame.showLayer = CreateOptionsCheckbox(frame, 'Show experimental layer (WoW Forever)', 'Show the layer read from NPC data in the bottom-right corner of the minimap, and share it with AutoLayer. This is not an official layer number.')
+	frame.showLayer:SetPoint('TOPLEFT', frame.enableGoldTracking, 'BOTTOMLEFT', 0, -8)
+	frame.showLayer:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showLayer = self:GetChecked() and true or false
+		end)
+		if not self:GetChecked() then
+			ForeverLayer.Reset()
+		end
+	end)
+
+	frame.helpText:SetPoint('TOPLEFT', frame.showLayer, 'BOTTOMLEFT', 4, -14)
 	frame.helpText:SetWidth(392)
 	frame.helpText:SetJustifyH('LEFT')
 	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button when alignment is off.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
@@ -3240,7 +3577,7 @@ OpenOptionsWindow = function()
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm layer [reset], /pkm hop, /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -3278,6 +3615,29 @@ local function HandleSlashCommand(message)
 	if command == 'reset' or command == 'default' then
 		local size = SetMinimapSize(DEFAULT_SIZE)
 		Print(string.format('Minimap size reset to %dx%d.', size, size))
+		return
+	end
+
+	if command == 'hop' then
+		ForeverLayer.RequestAnyLayer()
+		return
+	end
+
+	if command == 'layer' then
+		if not IS_FOREVER then
+			Print('The experimental layer display only works on WoW Forever.')
+		elseif string.lower(remainder or '') == 'reset' then
+			GetDatabase().layerCopies = nil
+			ForeverLayer.Reset()
+			Print('Layer and known copies cleared. Hover over two NPCs to find it again.')
+		else
+			local layer, state = ForeverLayer.GetState()
+			if layer then
+				Print(string.format('Layer %d (%s, zone copy %s, highest known %d). Experimental: read from NPC data.', layer, state, ForeverLayer.current.key, ForeverLayer.GetHighestCopy(ForeverLayer.current.zone)))
+			else
+				Print('Layer unknown. Hover over or target two different NPCs.')
+			end
+		end
 		return
 	end
 
