@@ -1,3 +1,6 @@
+## v1.0.40
+- On WoW Forever, Prokin now warns in chat when your group leader is in a different zone, because that invite cannot change your layer. When the leader is in your zone, it reminds you to click the blue world-refresh notice and press Refresh Now
+
 ## v1.0.39
 - Added an experimental layer display for WoW Forever in the bottom-right corner of the minimap, read from NPC data after two NPCs agree. It also shares the layer with AutoLayer, and can be turned off in options. `/pkm layer` shows details
 - Fills AutoLayer's Hopper layer list without Nova World Buffs, using the highest copy seen in each zone over the last 12 hours
