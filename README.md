@@ -57,6 +57,7 @@ On Forever, Blizzard's native queue eye replaces the LFG proxy button, so it app
 - `/pkm buffs` - unlock or lock the buff icons, then drag the blue box to move them
 - `/pkm buffs reset` - clear the saved buff position, then `/reload` to restore Blizzard's position
 - `/pkm layer` - show the experimental Forever layer details, or `/pkm layer reset` to clear it
+- On WoW Forever, a chat warning when your group leader is in another zone, since that invite cannot change your layer, or a reminder to press Refresh Now when they are in your zone
 - `/pkm hop` - send an AutoLayer request for any layer, even when your current layer is known. Left-clicking the layer display does the same, and right-clicking it opens the AutoLayer Hopper
 - `/pkm resetmoon` - restore the default position of the Forever day/night icon when icon alignment is off
 - `/pkm options` - open the Prokin Minimap options window

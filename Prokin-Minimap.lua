@@ -2455,6 +2455,80 @@ function ForeverLayer.GetState()
 	return current.layer, current.confirmed and 'confirmed' or 'checking'
 end
 
+-- Returns the zone-level map for a map ID, climbing past sub-zone maps such as towns.
+function ForeverLayer.GetZoneMap(mapID)
+	local zoneType = (Enum and Enum.UIMapType and Enum.UIMapType.Zone) or 3
+	for _ = 1, 8 do
+		if IsSecret(mapID) or type(mapID) ~= 'number' then
+			return nil
+		end
+
+		local info = C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+		if not info or IsSecret(info.mapType) or type(info.mapType) ~= 'number' then
+			return nil
+		end
+
+		if info.mapType <= zoneType or not info.parentMapID or info.parentMapID == 0 then
+			return mapID, info.name
+		end
+		mapID = info.parentMapID
+	end
+end
+
+function ForeverLayer.FindGroupLeader()
+	if UnitIsGroupLeader('player') then
+		return 'player'
+	end
+
+	local prefix = IsInRaid() and 'raid' or 'party'
+	local count = IsInRaid() and GetNumGroupMembers() or GetNumSubgroupMembers()
+	for index = 1, count do
+		local unit = prefix .. index
+		local isLeader = UnitIsGroupLeader(unit)
+		if not IsSecret(isLeader) and isLeader then
+			return unit
+		end
+	end
+end
+
+-- On Forever an invite only moves a player to the leader's copy of a zone they are both in, and
+-- only after the world-refresh notice. Each new leader and zone pairing gets one chat message:
+-- a warning if the leader is elsewhere, or a reminder to press Refresh Now.
+function ForeverLayer.CheckLeaderZone()
+	if not ForeverLayer.IsEnabled() or not IsInGroup() then
+		ForeverLayer.leaderNotice = nil
+		return
+	end
+
+	local leader = ForeverLayer.FindGroupLeader()
+	if not leader or leader == 'player' then
+		return
+	end
+
+	local leaderName = UnitName(leader)
+	local playerZone, playerZoneName = ForeverLayer.GetZoneMap(C_Map.GetBestMapForUnit('player'))
+	local leaderZone, leaderZoneName = ForeverLayer.GetZoneMap(C_Map.GetBestMapForUnit(leader))
+	if IsSecret(leaderName) or type(leaderName) ~= 'string' or not playerZone or not leaderZone then
+		return
+	end
+
+	local notice = leaderName .. ':' .. leaderZone .. ':' .. playerZone
+	if ForeverLayer.leaderNotice == notice then
+		return
+	end
+	ForeverLayer.leaderNotice = notice
+
+	if leaderZone ~= playerZone then
+		local message = string.format('Your group leader %s is in %s, not %s. This invite cannot move you to another layer here. Leave and try an invite from someone in %s.', leaderName, leaderZoneName or 'another zone', playerZoneName or 'your zone', playerZoneName or 'your zone')
+		Print('|cffff8000' .. message .. '|r')
+		if _G.UIErrorsFrame and _G.UIErrorsFrame.AddMessage then
+			_G.UIErrorsFrame:AddMessage('Group leader is in ' .. (leaderZoneName or 'another zone') .. ': this cannot change your layer.', 1, 0.5, 0)
+		end
+	else
+		Print(string.format('Your group leader %s is in %s with you. To change layer, click the blue world-refresh notice by the chat box and press Refresh Now, out of combat.', leaderName, leaderZoneName or 'this zone'))
+	end
+end
+
 function ForeverLayer.GetAutoLayer()
 	local autoLayer = _G.AutoLayer
 	if type(autoLayer) == 'table' and type(autoLayer.SlashCommandRequest) == 'function' then
@@ -2589,6 +2663,8 @@ function ForeverLayer.ApplyLayout()
 	display:SetPoint('BOTTOMRIGHT', Minimap, 'BOTTOMRIGHT', -26, 4)
 	display:Show()
 	ForeverLayer.Update()
+	-- Party members' zones can arrive after the roster event, so keep checking each tick.
+	ForeverLayer.CheckLeaderZone()
 end
 
 if IS_FOREVER then
@@ -2612,6 +2688,7 @@ if IS_FOREVER then
 				ForeverLayer.wasInGroup = inGroup
 				ForeverLayer.Reset()
 			end
+			ForeverLayer.CheckLeaderZone()
 		end
 	end)
 end
