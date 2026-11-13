@@ -1,3 +1,8 @@
+## v1.0.41
+- Added an experimental Auction House upgrade scan for WoW Forever. A Prokin tab on the Auction House scans armor and weapons and lists the biggest upgrade and best value for every equipment slot (or that there is none). Items are scored with Pawn scales or RestedXP Guides stat weights (requires Pawn or RestedXP Guides). Options picks the weights, class, specialization (every spec of all 9 classes) and required level range, and can add stat filters so only items with the stats you want (any or all, with optional minimums) are listed. Options are saved per character. Show opens the listing in the Buy view, where you confirm the purchase, and Shift+Right-click on a result links the item in chat
+- Added an experimental WoW Forever language test. `/pkm language` shows your preferred language, datacenter, guild language and change cooldown. Confirmed layers are logged with those settings (`/pkm language log`) to test reports that language affects layer placement. `/pkm language set <language> confirm` changes the account language, which the game then locks for its cooldown
+- The layer log also records what players report can move you to another layer: joining or leaving a group (with the leader's zone), joining or leaving a guild, crossing into another zone, loading screens and world-refresh notices. A changed layer in the same zone is announced in chat and marked in the log. `/pkm language note <text>` adds your own note
+
 ## v1.0.40
 - On WoW Forever, Prokin now warns in chat when your group leader is in a different zone, because that invite cannot change your layer. When the leader is in your zone, it reminds you to click the blue world-refresh notice and press Refresh Now
 

@@ -2,10 +2,11 @@
 ## Title: Prokin-Minimap
 ## Notes: Squares the minimap for The Burning Crusade Anniversary and World of Warcraft: Forever using the ElvUI mask method.
 ## Author: Prokin
-## Version: 1.0.40
+## Version: 1.0.41
 ## SavedVariables: ProkinMinimapDB
 ## IconTexture: Interface\AddOns\Prokin-Minimap\Media\ProkinFaceIcon.png
 
 Prokin-Minimap-GoldTracker.lua
+Prokin-Minimap-AuctionUpgrades.lua
 Prokin-Minimap-Ledger.lua
 Prokin-Minimap.lua

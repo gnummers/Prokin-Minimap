@@ -35,6 +35,7 @@ Features:
 - Lets you left-drag the visible Blizzard minimap widgets around the outside edge of the square minimap border with saved positions
 - Includes MinimapButtonButton compatibility so those Blizzard widgets are not pulled into its collected button tray
 - Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
+- Experimental WoW Forever Auction House upgrade scan: a Prokin tab on the Auction House lists the biggest upgrade and best value for every equipment slot, scored with Pawn scales or RestedXP Guides stat weights (one of them must be installed), with options for class, specialization, level range and stat filters
 - Persistent square resizing with a default size of `400x400`
 - Header spacing that keeps the zone text visible when the minimap is enlarged
 - Custom 1 pixel black border around the minimap

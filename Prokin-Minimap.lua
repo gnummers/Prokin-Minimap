@@ -2353,6 +2353,7 @@ function ForeverLayer.Observe(unit)
 		if guid ~= current.firstGUID then
 			current.confirmed = true
 			ForeverLayer.RecordCopy(zone, zoneCopy)
+			ForeverLayer.LogObservation(zone, zoneCopy)
 		end
 	end
 
@@ -2526,6 +2527,415 @@ function ForeverLayer.CheckLeaderZone()
 		end
 	else
 		Print(string.format('Your group leader %s is in %s with you. To change layer, click the blue world-refresh notice by the chat box and press Refresh Now, out of combat.', leaderName, leaderZoneName or 'this zone'))
+	end
+end
+
+-- Experimental language test. Players report that Forever's Preferred Online Language, and a
+-- guild's preferred language, change which layer they are placed on. Blizzard has not said
+-- how. The settings come from the same API as Options > System > Languages and Social. Each
+-- confirmed layer is logged with the language, datacenter and guild settings in force, so
+-- layers can be compared before and after a change. Changing the language is only done when
+-- explicitly confirmed, because the game then locks it for the cooldown it reports.
+ForeverLayer.LOG_LIMIT = 150
+
+function ForeverLayer.GetLanguageAPI()
+	local account = _G.C_AccountServices
+	if type(account) == 'table' and type(account.GetPreferredPlaySettings) == 'function' then
+		return account
+	end
+end
+
+local function FindOptionName(getOptions, id)
+	if type(getOptions) ~= 'function' then
+		return nil
+	end
+
+	local ids, names = getOptions()
+	for index, optionID in ipairs(ids or {}) do
+		if optionID == id then
+			return names and names[index]
+		end
+	end
+end
+
+-- Returns a table describing one set of preferred-play settings, or nil when unavailable.
+function ForeverLayer.ReadPlaySettings(api)
+	if type(api) ~= 'table' or type(api.GetPreferredPlaySettings) ~= 'function' then
+		return nil
+	end
+
+	local loaded, localeID, datacenterID, localeChanged, datacenterChanged, cooldownDays = api.GetPreferredPlaySettings()
+	if IsSecret(loaded) or IsSecret(localeID) or IsSecret(datacenterID) then
+		return nil
+	end
+
+	local account = ForeverLayer.GetLanguageAPI()
+	return {
+		loaded = loaded == true,
+		localeID = localeID or 0,
+		datacenterID = datacenterID or 0,
+		localeChanged = localeChanged or 0,
+		datacenterChanged = datacenterChanged or 0,
+		cooldownDays = cooldownDays or 0,
+		localeName = FindOptionName((api.GetPreferredLocales or (account and account.GetPreferredLocales)), localeID) or (localeID and localeID > 0 and ('#' .. localeID)) or 'not set',
+		datacenterName = FindOptionName((api.GetPreferredDatacenterLocalities or (account and account.GetPreferredDatacenterLocalities)), datacenterID) or (datacenterID and datacenterID > 0 and ('#' .. datacenterID)) or 'not set',
+	}
+end
+
+function ForeverLayer.GetGuildPlaySettings()
+	if type(IsInGuild) == 'function' and IsInGuild() then
+		return ForeverLayer.ReadPlaySettings(_G.C_GuildInfo)
+	end
+end
+
+-- Seconds until the account language can be changed again.
+function ForeverLayer.GetLanguageLockout(settings)
+	if not settings or settings.localeChanged <= 0 or settings.cooldownDays <= 0 then
+		return 0
+	end
+
+	return math.max(0, settings.localeChanged + (settings.cooldownDays * 86400) - time())
+end
+
+function ForeverLayer.RequestPlaySettings()
+	local account = ForeverLayer.GetLanguageAPI()
+	if account and type(account.RequestPreferredPlaySettings) == 'function' then
+		pcall(account.RequestPreferredPlaySettings)
+	end
+
+	local guild = _G.C_GuildInfo
+	if type(IsInGuild) == 'function' and IsInGuild() and type(guild) == 'table' and type(guild.RequestPreferredPlaySettings) == 'function' then
+		pcall(guild.RequestPreferredPlaySettings)
+	end
+end
+
+function ForeverLayer.GetLayerLog()
+	local db = GetDatabase()
+	if type(db.layerLog) ~= 'table' then
+		db.layerLog = {}
+	end
+	return db.layerLog
+end
+
+function ForeverLayer.AddLogEntry(entry)
+	local log = ForeverLayer.GetLayerLog()
+	table.insert(log, entry)
+	while #log > ForeverLayer.LOG_LIMIT do
+		table.remove(log, 1)
+	end
+end
+
+local function DescribeSettings()
+	local account = ForeverLayer.ReadPlaySettings(ForeverLayer.GetLanguageAPI())
+	local guild = ForeverLayer.GetGuildPlaySettings()
+	return account and account.localeName or 'unknown', account and account.datacenterName or 'unknown', guild and guild.localeName or nil
+end
+
+-- Logs a confirmed layer when the zone, layer or language settings differ from the last entry.
+function ForeverLayer.LogObservation(zone, layer)
+	local language, datacenter, guildLanguage = DescribeSettings()
+	local zoneName = select(2, ForeverLayer.GetZoneMap(zone)) or tostring(zone)
+	local log = ForeverLayer.GetLayerLog()
+	local last = log[#log]
+	if last and last.kind == 'layer' and last.zone == zoneName and last.layer == layer and last.language == language and last.datacenter == datacenter and last.guildLanguage == guildLanguage then
+		return
+	end
+
+	-- Announce a layer that differs from the last one logged in this zone.
+	local previous
+	for index = #log, 1, -1 do
+		if log[index].kind == 'layer' and log[index].zone == zoneName then
+			previous = log[index].layer
+			break
+		end
+	end
+	local from = previous ~= nil and previous ~= layer and previous or nil
+	if from then
+		Print(string.format('|cff00ff00Layer changed in %s: %s -> %s.|r', zoneName, tostring(from), tostring(layer)))
+	end
+
+	ForeverLayer.AddLogEntry({ kind = 'layer', time = time(), zone = zoneName, layer = layer, from = from, language = language, datacenter = datacenter, guildLanguage = guildLanguage })
+end
+
+-- Records when the account or guild settings change, so later layers can be compared.
+function ForeverLayer.OnPlaySettingsUpdated()
+	local language, datacenter, guildLanguage = DescribeSettings()
+	local last = ForeverLayer.lastSettings
+	ForeverLayer.lastSettings = { language = language, datacenter = datacenter, guildLanguage = guildLanguage }
+	if last and (last.language ~= language or last.datacenter ~= datacenter or last.guildLanguage ~= guildLanguage) then
+		ForeverLayer.AddLogEntry({ kind = 'settings', time = time(), language = language, datacenter = datacenter, guildLanguage = guildLanguage, previous = last.language })
+		Print(string.format('Preferred language is now %s. Relog, then hover over two NPCs and use /pkm language log to compare layers.', language))
+	end
+end
+
+function ForeverLayer.PrintLanguageStatus()
+	local account = ForeverLayer.ReadPlaySettings(ForeverLayer.GetLanguageAPI())
+	if not account then
+		Print('Language settings are unavailable on this client.')
+		return
+	end
+
+	local guild = ForeverLayer.GetGuildPlaySettings()
+	local layer, state = ForeverLayer.GetState()
+	local lockout = ForeverLayer.GetLanguageLockout(account)
+	Print(string.format('Preferred language: %s. Datacenter: %s. Guild language: %s.', account.localeName, account.datacenterName, guild and guild.localeName or 'no guild'))
+	Print(string.format('Layer: %s. Language change %s.', layer and (layer .. ' (' .. state .. ')') or 'unknown',
+		lockout > 0 and ('locked for ' .. SecondsToTime(lockout)) or 'available now'))
+	if not account.loaded then
+		Print('Settings are still loading from the server. Try again in a few seconds.')
+		ForeverLayer.RequestPlaySettings()
+	end
+end
+
+function ForeverLayer.PrintLanguageOptions()
+	local account = ForeverLayer.GetLanguageAPI()
+	local ids, names = {}, {}
+	if account and type(account.GetPreferredLocales) == 'function' then
+		ids, names = account.GetPreferredLocales()
+	end
+
+	if not ids or #ids == 0 then
+		Print('No preferred languages are available on this client.')
+		return
+	end
+
+	local list = {}
+	for index, id in ipairs(ids) do
+		list[#list + 1] = (names and names[index]) or ('#' .. id)
+	end
+	Print('Preferred languages: ' .. table.concat(list, ', ') .. '.')
+end
+
+function ForeverLayer.PrintLayerLog()
+	local log = ForeverLayer.GetLayerLog()
+	if #log == 0 then
+		Print('No layers logged yet. Hover over two NPCs to log your layer.')
+		return
+	end
+
+	Print('Layer log (oldest first, last 20):')
+	for index = math.max(1, #log - 19), #log do
+		local entry = log[index]
+		local stamp = date('%m-%d %H:%M:%S', entry.time or 0)
+		if entry.kind == 'settings' then
+			Print(string.format('%s  Language changed: %s -> %s (guild %s)', stamp, entry.previous or '?', entry.language or '?', entry.guildLanguage or 'none'))
+		elseif entry.kind == 'event' then
+			Print(string.format('%s  |cffaaaaaa[%s]|r %s', stamp, entry.zone or '?', entry.text or '?'))
+		else
+			Print(string.format('%s  |cffffd100%s layer %s%s|r  [%s, %s, guild %s]', stamp, entry.zone or '?', tostring(entry.layer), entry.from and (' (was ' .. tostring(entry.from) .. ')') or '',
+				entry.language or '?', entry.datacenter or '?', entry.guildLanguage or 'none'))
+		end
+	end
+end
+
+-- Changes the account's preferred language. Requires the word "confirm" because the game then
+-- locks the setting for its cooldown, usually 24 hours.
+function ForeverLayer.SetLanguage(request)
+	local account = ForeverLayer.GetLanguageAPI()
+	local settings = ForeverLayer.ReadPlaySettings(account)
+	if not account or not settings or type(account.SetPreferredPlaySettings) ~= 'function' or type(account.GetPreferredLocales) ~= 'function' then
+		Print('Changing the preferred language is unavailable on this client.')
+		return
+	end
+
+	local wanted, confirmed = string.match(string.lower(request or ''), '^(.-)%s*(confirm)$')
+	wanted = wanted or string.lower(request or '')
+	wanted = wanted:gsub('^%s+', ''):gsub('%s+$', '')
+	if wanted == '' then
+		Print('Usage: /pkm language set <language> confirm. /pkm language options lists them.')
+		return
+	end
+
+	local ids, names = account.GetPreferredLocales()
+	local targetID, targetName
+	for index, id in ipairs(ids or {}) do
+		local name = names and names[index]
+		if type(name) == 'string' and string.lower(name):sub(1, #wanted) == wanted then
+			targetID, targetName = id, name
+			break
+		end
+	end
+
+	if not targetID then
+		Print('No preferred language matches "' .. wanted .. '". /pkm language options lists them.')
+		return
+	end
+
+	if targetID == settings.localeID then
+		Print('Your preferred language is already ' .. targetName .. '.')
+		return
+	end
+
+	local lockout = ForeverLayer.GetLanguageLockout(settings)
+	if lockout > 0 then
+		Print('The game allows another language change in ' .. SecondsToTime(lockout) .. '.')
+		return
+	end
+
+	if not settings.loaded then
+		Print('Settings are still loading from the server. Try again in a few seconds.')
+		ForeverLayer.RequestPlaySettings()
+		return
+	end
+
+	if not confirmed then
+		Print(string.format('This changes your account-wide preferred language from %s to %s, and the game then locks it for %d day(s). Type /pkm language set %s confirm to go ahead.',
+			settings.localeName, targetName, math.max(settings.cooldownDays, 1), wanted))
+		return
+	end
+
+	local ok, started = pcall(account.SetPreferredPlaySettings, targetID, 0)
+	if ok and started ~= false then
+		Print('Requested preferred language ' .. targetName .. '. Relog, then hover over two NPCs and use /pkm language log to compare layers.')
+	else
+		Print('The game did not accept the language change.')
+	end
+end
+
+-- Logs what players report can move you to another layer: groups, guilds, zone lines, loading
+-- screens and the world-refresh notice. With the layer entries around them, the log shows which
+-- of these was followed by a change. The notice is not in Blizzard's UI code, so it is matched
+-- by text in popups, error messages and system chat; /pkm language note covers anything missed.
+function ForeverLayer.GetZoneName()
+	return select(2, ForeverLayer.GetZoneMap(C_Map.GetBestMapForUnit('player')))
+end
+
+function ForeverLayer.LogEvent(text)
+	local log = ForeverLayer.GetLayerLog()
+	local last = log[#log]
+	if last and last.kind == 'event' and last.text == text and time() - (last.time or 0) < 30 then
+		return
+	end
+	ForeverLayer.AddLogEntry({ kind = 'event', time = time(), zone = ForeverLayer.GetZoneName(), text = text })
+end
+
+function ForeverLayer.CheckRefreshText(text)
+	if IsSecret(text) or type(text) ~= 'string' then
+		return
+	end
+
+	local lower = string.lower(text)
+	if lower:find('refresh', 1, true) and (lower:find('world', 1, true) or lower:find('layer', 1, true)) then
+		ForeverLayer.LogEvent('Refresh notice: ' .. text)
+	end
+end
+
+function ForeverLayer.ScanPopups()
+	for index = 1, 4 do
+		local popup = _G['StaticPopup' .. index]
+		if popup and popup.IsShown and popup:IsShown() then
+			local region = popup.text or popup.Text or _G['StaticPopup' .. index .. 'Text']
+			if region and region.GetText then
+				local ok, text = pcall(region.GetText, region)
+				if ok then
+					ForeverLayer.CheckRefreshText(text)
+				end
+			end
+		end
+	end
+end
+
+function ForeverLayer.OnGroupChanged()
+	local inGroup = IsInGroup()
+	local was = ForeverLayer.loggedGroup
+	ForeverLayer.loggedGroup = inGroup
+	if was == nil or was == inGroup then
+		return
+	end
+
+	if not inGroup then
+		ForeverLayer.LogEvent('Left the group')
+		return
+	end
+
+	-- Party members' names and zones arrive shortly after the roster event.
+	C_Timer.After(2, function()
+		if not IsInGroup() then
+			return
+		end
+
+		local leader = ForeverLayer.FindGroupLeader()
+		if leader == 'player' then
+			ForeverLayer.LogEvent('Formed a group as leader')
+			return
+		end
+
+		local name = leader and UnitName(leader)
+		if IsSecret(name) or type(name) ~= 'string' then
+			name = 'unknown'
+		end
+		local zoneName = leader and select(2, ForeverLayer.GetZoneMap(C_Map.GetBestMapForUnit(leader)))
+		ForeverLayer.LogEvent(string.format("Joined %s's group (leader in %s)", name, zoneName or 'unknown zone'))
+	end)
+end
+
+function ForeverLayer.OnGuildChanged()
+	local inGuild = type(IsInGuild) == 'function' and IsInGuild()
+	local name = inGuild and type(GetGuildInfo) == 'function' and GetGuildInfo('player') or nil
+	if IsSecret(name) or (inGuild and not name) then
+		return
+	end
+
+	local key = name or false
+	local was = ForeverLayer.loggedGuild
+	ForeverLayer.loggedGuild = key
+	if was == nil or was == key then
+		return
+	end
+	ForeverLayer.LogEvent(name and ('Joined guild ' .. name) or 'Left the guild')
+end
+
+function ForeverLayer.OnZoneChanged()
+	local zone, name = ForeverLayer.GetZoneMap(C_Map.GetBestMapForUnit('player'))
+	if not zone or zone == ForeverLayer.loggedZone then
+		return
+	end
+
+	local previous = ForeverLayer.loggedZone
+	ForeverLayer.loggedZone = zone
+	if previous then
+		ForeverLayer.LogEvent('Entered ' .. (name or 'a new zone'))
+	end
+end
+
+if IS_FOREVER then
+	local settingsEvents = CreateFrame('Frame')
+	for _, event in ipairs({ 'PLAYER_LOGIN', 'PREFERRED_PLAY_SETTINGS_UPDATED', 'GUILD_PREFERRED_PLAY_SETTINGS_UPDATED', 'PLAYER_ENTERING_WORLD', 'ZONE_CHANGED_NEW_AREA', 'GROUP_ROSTER_UPDATE', 'PLAYER_GUILD_UPDATE', 'CHAT_MSG_SYSTEM' }) do
+		settingsEvents:RegisterEvent(event)
+	end
+	settingsEvents:SetScript('OnEvent', function(_, event, ...)
+		if event == 'PLAYER_ENTERING_WORLD' then
+			local isInitialLogin, isReloadingUi = ...
+			ForeverLayer.LogEvent(isInitialLogin and 'Logged in' or isReloadingUi and 'Reloaded the UI' or 'Loading screen')
+			ForeverLayer.OnZoneChanged()
+			ForeverLayer.OnGroupChanged()
+		elseif event == 'ZONE_CHANGED_NEW_AREA' then
+			ForeverLayer.OnZoneChanged()
+		elseif event == 'GROUP_ROSTER_UPDATE' then
+			ForeverLayer.OnGroupChanged()
+		elseif event == 'PLAYER_GUILD_UPDATE' then
+			ForeverLayer.OnGuildChanged()
+			ForeverLayer.RequestPlaySettings()
+		elseif event == 'CHAT_MSG_SYSTEM' then
+			ForeverLayer.CheckRefreshText((...))
+		else
+			if event == 'PLAYER_LOGIN' then
+				ForeverLayer.RequestPlaySettings()
+				ForeverLayer.OnGuildChanged()
+			end
+			ForeverLayer.OnPlaySettingsUpdated()
+		end
+	end)
+
+	if type(_G.StaticPopup_Show) == 'function' then
+		hooksecurefunc('StaticPopup_Show', function()
+			C_Timer.After(0, ForeverLayer.ScanPopups)
+		end)
+	end
+	if _G.UIErrorsFrame and _G.UIErrorsFrame.AddMessage then
+		hooksecurefunc(_G.UIErrorsFrame, 'AddMessage', function(_, text)
+			ForeverLayer.CheckRefreshText(text)
+		end)
 	end
 end
 
@@ -3654,7 +4064,7 @@ OpenOptionsWindow = function()
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm layer [reset], /pkm hop, /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm layer [reset], /pkm hop, /pkm language [log|note <text>|options|set <language> confirm], /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -3692,6 +4102,36 @@ local function HandleSlashCommand(message)
 	if command == 'reset' or command == 'default' then
 		local size = SetMinimapSize(DEFAULT_SIZE)
 		Print(string.format('Minimap size reset to %dx%d.', size, size))
+		return
+	end
+
+	if command == 'language' then
+		if not IS_FOREVER then
+			Print('The language test only works on WoW Forever.')
+			return
+		end
+
+		local action, argument = string.match(remainder or '', '^(%S*)%s*(.-)$')
+		action = string.lower(action or '')
+		if action == 'log' then
+			ForeverLayer.PrintLayerLog()
+		elseif action == 'options' then
+			ForeverLayer.PrintLanguageOptions()
+		elseif action == 'set' then
+			ForeverLayer.SetLanguage(argument)
+		elseif action == 'note' then
+			if argument == '' then
+				Print('Usage: /pkm language note <text>, for example /pkm language note pressed Refresh Now.')
+			else
+				ForeverLayer.LogEvent('Note: ' .. argument)
+				Print('Noted in the layer log.')
+			end
+		elseif action == 'clearlog' then
+			GetDatabase().layerLog = nil
+			Print('Layer log cleared.')
+		else
+			ForeverLayer.PrintLanguageStatus()
+		end
 		return
 	end
 
