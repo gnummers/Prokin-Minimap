@@ -1,3 +1,7 @@
+## v1.0.43
+- Fixed an `[ADDON_ACTION_FORBIDDEN]` error on WoW Forever at login: smart marking no longer registers the combat log, which Forever does not allow addons to use. Deaths are now seen on the mobs themselves
+- Fixed a "junk after document element" warning from `Bindings.xml`
+
 ## v1.0.42
 - Added smart dungeon marking, on by default when you lead a 5-player dungeon group. Each pack gets a kill order: Skull, then Cross, going to bosses, elites, healers and casters first. Crowd-control icons follow your group: Moon for Polymorph, Square for Freezing Trap, Circle for Shackle Undead, Diamond for Banish, Triangle for Hibernate and Star for Sap, each only on mobs it can hold. In combat, Cross moves to Skull when Skull dies and the next mob gets Cross. Icons other players placed are left alone
 - On The Burning Crusade Anniversary, packs are marked automatically as you approach them. WoW Forever only lets the game place icons from a key press, so bind Mark Mob (Key Bindings > AddOns > Prokin Minimap) and press it while hovering a mob. A Clear All Marks binding is included
