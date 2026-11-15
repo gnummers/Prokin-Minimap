@@ -378,6 +378,15 @@ function Marker.Plan(mobs, assigned, crowdControl, inCombat)
 end
 
 local function AddUnit(list, seen, unit, inCombat)
+	-- A dead mob gives its icon back. This also covers WoW Forever, where addons cannot read the
+	-- combat log for deaths.
+	if Marker.assigned and next(Marker.assigned) and SafeCall(UnitIsDead, unit) then
+		local deadGUID = SafeCall(UnitGUID, unit)
+		if deadGUID and Marker.assigned[deadGUID] then
+			Marker.assigned[deadGUID] = nil
+		end
+	end
+
 	local mob = Marker.ReadUnit(unit)
 	if not mob or seen[mob.guid] then
 		return
@@ -912,8 +921,13 @@ if type(CreateFrame) == 'function' then
 	Marker.EnsureKeyButton()
 	Marker.EnsurePackButton()
 	local events = CreateFrame('Frame')
-	for _, event in ipairs({ 'PLAYER_ENTERING_WORLD', 'GROUP_ROSTER_UPDATE', 'PARTY_LEADER_CHANGED', 'UPDATE_MOUSEOVER_UNIT', 'PLAYER_TARGET_CHANGED', 'NAME_PLATE_UNIT_ADDED', 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'COMBAT_LOG_EVENT_UNFILTERED', 'ADDON_ACTION_FORBIDDEN', 'ADDON_ACTION_BLOCKED', 'UPDATE_BINDINGS' }) do
-		pcall(events.RegisterEvent, events, event)
+	for _, event in ipairs({ 'PLAYER_ENTERING_WORLD', 'GROUP_ROSTER_UPDATE', 'PARTY_LEADER_CHANGED', 'UPDATE_MOUSEOVER_UNIT', 'PLAYER_TARGET_CHANGED', 'NAME_PLATE_UNIT_ADDED', 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'ADDON_ACTION_FORBIDDEN', 'ADDON_ACTION_BLOCKED', 'UPDATE_BINDINGS' }) do
+		events:RegisterEvent(event)
+	end
+	-- WoW Forever restricts the combat log: registering it is a forbidden action there, even inside
+	-- pcall. Marking on Forever comes from key presses, and deaths are seen on the mobs instead.
+	if not Marker.IS_FOREVER then
+		events:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')
 	end
 	events:SetScript('OnEvent', Marker.OnEvent)
 
