@@ -1,0 +1,9 @@
+<Bindings>
+	<Binding name="CLICK ProkinMinimapMarkPackButton:LeftButton" header="PROKINMINIMAP" category="ADDONS">
+	</Binding>
+	<Binding name="CLICK ProkinMinimapMarkButton:LeftButton" category="ADDONS">
+	</Binding>
+	<Binding name="CLICK ProkinMinimapClearMarksButton:LeftButton" category="ADDONS">
+	</Binding>
+</Bindings>
+6
