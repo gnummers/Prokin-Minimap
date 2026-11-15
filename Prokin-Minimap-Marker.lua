@@ -242,6 +242,12 @@ end
 function Marker.GetGroupCrowdControl()
 	local classes = {}
 	local units = { 'player', 'party1', 'party2', 'party3', 'party4' }
+	if IsInRaid() then
+		units = { 'player' }
+		for index = 1, (SafeCall(GetNumGroupMembers) or 0) do
+			units[#units + 1] = 'raid' .. index
+		end
+	end
 	for _, unit in ipairs(units) do
 		if SafeCall(UnitExists, unit) then
 			local _, class = SafeCall(UnitClass, unit)
@@ -472,14 +478,15 @@ function Marker.CanMarkDirectly()
 end
 
 function Marker.Scan()
-	if not Marker.IsActive() then
+	local direct = Marker.IsActive() and Marker.CanMarkDirectly()
+	if not direct and not Marker.CanUsePack() then
 		return
 	end
 
 	local inCombat = SafeCall(UnitAffectingCombat, 'player') and true or false
 	local mobs = Marker.CollectMobs(inCombat)
 	Marker.Tidy(mobs)
-	if not Marker.CanMarkDirectly() then
+	if not direct then
 		Marker.UpdateKeyButton(mobs, inCombat)
 		Marker.UpdatePackButton(mobs, inCombat)
 		return
@@ -629,9 +636,14 @@ function Marker.EnsurePackButton()
 				Marker.Remember(entry.guid, entry.icon)
 			end
 			self.pending = nil
-		elseif not (type(InCombatLockdown) == 'function' and InCombatLockdown()) then
-			local active, reason = Marker.GetActiveState()
-			Print(active and 'Nothing to mark: no unmarked mobs are in range. Turn on enemy nameplates (V) so Prokin can see the pack.' or ('Mark Pack is idle: ' .. reason .. '.'))
+		elseif not self.fallthrough and not (type(InCombatLockdown) == 'function' and InCombatLockdown()) then
+			-- Said at most every 30 seconds, so a key pressed often does not flood chat.
+			local now = GetTime()
+			if not Marker.idleNoticeAt or now - Marker.idleNoticeAt > 30 then
+				Marker.idleNoticeAt = now
+				local ready, reason = Marker.CanUsePack()
+				Print(ready and 'Nothing to mark: no unmarked mobs are in range. Turn on enemy nameplates (V) so Prokin can see the pack.' or ('Mark Pack is idle: ' .. reason .. '.'))
+			end
 		end
 	end)
 	Marker.packButton = button
@@ -661,14 +673,91 @@ function Marker.UpdatePackButton(mobs, inCombat)
 	end
 
 	local text, pending = '', nil
-	if mobs and not inCombat then
+	if mobs and not inCombat and Marker.CanUsePack() then
 		local changes = Marker.Plan(mobs, Marker.GetAssignedIcons(), Marker.GetGroupCrowdControl(), false)
 		text, pending = Marker.BuildPackMacro(mobs, changes)
+	end
+
+	-- With nothing to mark, and all through combat, the key does its usual job.
+	button.fallthrough = nil
+	if text == '' then
+		button.fallthrough = Marker.GetFallthroughMacro(Marker.boundPackKey)
+		text = button.fallthrough or ''
 	end
 	if button:GetAttribute('macrotext') ~= text then
 		button:SetAttribute('macrotext', text)
 	end
 	button.pending = pending
+end
+
+-- Whether Mark Pack may mark here: alone anywhere, as a party's leader (or any member with
+-- /pkm mark anyone), or as a raid's leader or assistant, who are the only raid members the game
+-- lets place icons.
+function Marker.CanUsePack()
+	local settings = Marker.GetSettings()
+	if not settings.enabled then
+		return false, 'smart marking is turned off'
+	end
+	if Marker.IsOtherMarkerLoaded() then
+		return false, 'AutoMarkAssist is loaded'
+	end
+
+	if IsInRaid() then
+		local leader = SafeCall(UnitIsGroupLeader, 'player')
+		local assistant = SafeCall(UnitIsGroupAssistant, 'player')
+		if not leader and not assistant then
+			return false, 'only the raid leader and assistants can mark'
+		end
+	elseif IsInGroup() and not settings.anyMember and not SafeCall(UnitIsGroupLeader, 'player') then
+		return false, 'you are not the group leader (/pkm mark anyone allows it)'
+	end
+	return true
+end
+
+-- Action bar bindings and the buttons they press, so a key Mark Pack holds can still use its
+-- action button through /click.
+Marker.BAR_BUTTONS = {
+	ACTIONBUTTON = 'ActionButton',
+	MULTIACTIONBAR1BUTTON = 'MultiBarBottomLeftButton',
+	MULTIACTIONBAR2BUTTON = 'MultiBarBottomRightButton',
+	MULTIACTIONBAR3BUTTON = 'MultiBarRightButton',
+	MULTIACTIONBAR4BUTTON = 'MultiBarLeftButton',
+	MULTIACTIONBAR5BUTTON = 'MultiBar5Button',
+	MULTIACTIONBAR6BUTTON = 'MultiBar6Button',
+	MULTIACTIONBAR7BUTTON = 'MultiBar7Button',
+}
+
+-- A /click line that does what the key normally does, or nil when that cannot be pressed for it.
+function Marker.GetFallthroughMacro(key)
+	if not key or type(GetBindingAction) ~= 'function' then
+		return nil
+	end
+
+	local action = SafeCall(GetBindingAction, key)
+	if type(action) ~= 'string' or action == '' then
+		return nil
+	end
+
+	local frameName, mouseButton
+	local prefix, index = action:match('^(%u[%u%d]-BUTTON)(%d+)$')
+	if prefix and Marker.BAR_BUTTONS[prefix] then
+		frameName, mouseButton = Marker.BAR_BUTTONS[prefix] .. index, 'LeftButton'
+	else
+		frameName, mouseButton = action:match('^CLICK ([^:]+):(.+)$')
+	end
+	if not frameName or not _G[frameName] then
+		return nil
+	end
+
+	-- Action buttons act on key down or key up, following the player's setting.
+	local onKeyDown = type(GetCVarBool) == 'function' and GetCVarBool('ActionButtonUseKeyDown')
+	return string.format('/click %s %s%s', frameName, mouseButton, onKeyDown and ' 1' or '')
+end
+
+-- Whether the key already does something Mark Pack cannot pass on.
+function Marker.KeyHasOtherAction(key)
+	local action = type(GetBindingAction) == 'function' and SafeCall(GetBindingAction, key)
+	return type(action) == 'string' and action ~= '' and not Marker.GetFallthroughMacro(key)
 end
 
 -- The key Mark Pack uses: one the player bound in Key Bindings wins, otherwise Prokin's setting.
@@ -685,8 +774,10 @@ function Marker.GetPackKey()
 	return key or Marker.DEFAULT_PACK_KEY, false
 end
 
--- Prokin's key is an override binding: it never changes the player's saved bindings, and it is
--- only held while marking is active, so the key does its normal job everywhere else. Bindings
+-- Prokin's key is an override binding, so the player's saved bindings never change. It is held
+-- wherever Mark Pack can mark, except where The Burning Crusade Anniversary marks on its own.
+-- When there is nothing to mark, and in combat, it passes the press on to the key's action
+-- button. A key bound to something it cannot pass on is only held inside instances. Bindings
 -- cannot change in combat, so a change waits for combat to end.
 function Marker.ApplyPackBinding()
 	local button = Marker.EnsurePackButton()
@@ -700,7 +791,10 @@ function Marker.ApplyPackBinding()
 	Marker.bindingPending = nil
 
 	local key, fromKeyBindings = Marker.GetPackKey()
-	local wanted = not fromKeyBindings and key and Marker.IsActive() and not Marker.CanMarkDirectly() and key or nil
+	local wanted = not fromKeyBindings and key and Marker.CanUsePack() and not (Marker.IsActive() and Marker.CanMarkDirectly()) and key or nil
+	if wanted and Marker.KeyHasOtherAction(wanted) and not SafeCall(IsInInstance) then
+		wanted = nil
+	end
 	if wanted == Marker.boundPackKey then
 		return
 	end
@@ -711,11 +805,12 @@ function Marker.ApplyPackBinding()
 		SetOverrideBindingClick(button, true, wanted, 'ProkinMinimapMarkPackButton', 'LeftButton')
 		Marker.boundPackKey = wanted
 		local settings = Marker.GetSettings()
-		if not settings.packKeyNoticeShown then
-			settings.packKeyNoticeShown = true
-			Print(string.format('Mark Pack is on %s while you lead a dungeon group, which replaces that key\'s action button until you leave. Walk up to a pack and press %s to mark it. /pkm mark key <key> changes it, /pkm mark key none turns it off.', wanted, wanted))
+		if not settings.packKeyFallthroughNoticeShown then
+			settings.packKeyFallthroughNoticeShown = true
+			Print(string.format('Mark Pack is on %s: near unmarked mobs, press %s once to mark the pack. With nothing to mark, and in combat, %s still uses its action button. /pkm mark key <key> changes it, /pkm mark key none turns it off.', wanted, wanted, wanted))
 		end
 	end
+	Marker.UpdatePackButton(nil, false)
 end
 
 -- An account-wide macro that presses Mark Pack, so every character can put it on an action bar.
@@ -807,10 +902,10 @@ function Marker.PrintStatus()
 		active and ', marking now' or (settings.enabled and (' (' .. reason .. ')') or ''),
 		settings.anyMember and 'any group member' or 'group leader only',
 		Marker.CanMarkDirectly() and 'automatic' or 'Mark Pack and Mark Mob keys'))
-	if not Marker.CanMarkDirectly() then
-		local key = Marker.GetPackKey()
-		Print('Mark Pack key: ' .. (key or 'none') .. '. Walk up to a pack and press it once to mark the whole pack.')
-	end
+	local key = Marker.GetPackKey()
+	local packReady, packReason = Marker.CanUsePack()
+	Print(string.format('Mark Pack key: %s. %s', key or 'none',
+		packReady and 'Near unmarked mobs, press it once to mark the whole pack; otherwise it uses its usual action.' or ('Idle: ' .. packReason .. '.')))
 
 	local crowdControl = Marker.GetGroupCrowdControl()
 	local names = {}
@@ -845,10 +940,12 @@ function Marker.HandleSlash(argument)
 			Wipe(Marker.assigned)
 		end
 		Marker.lastActive = nil
+		Marker.ApplyPackBinding()
 		Print('Smart marking turned ' .. action .. '.')
 	elseif action == 'leader' or action == 'anyone' then
 		settings.anyMember = action == 'anyone'
 		Marker.lastActive = nil
+		Marker.ApplyPackBinding()
 		Print(settings.anyMember and 'Smart marking now marks for any group member, not only the leader.' or 'Smart marking now only marks when you lead the group.')
 	elseif action == 'key' then
 		Marker.SetPackKey(string.match(argument or '', '^%S*%s*(.-)%s*$'))
@@ -905,7 +1002,13 @@ function Marker.OnEvent(_, event, ...)
 		Marker.ApplyPackBinding()
 	end
 
-	if Marker.IsActive() then
+	-- Combat lockdown starts after this event, so the key is switched to its usual action now.
+	if event == 'PLAYER_REGEN_DISABLED' then
+		Marker.UpdatePackButton(nil, true)
+		return
+	end
+
+	if Marker.IsActive() or Marker.CanUsePack() then
 		Marker.Scan()
 	elseif Marker.packButton and Marker.packButton.pending then
 		Marker.UpdatePackButton(nil, false)
@@ -940,7 +1043,7 @@ if type(CreateFrame) == 'function' then
 			if not Marker.bindingPending then
 				Marker.ApplyPackBinding()
 			end
-			if Marker.IsActive() then
+			if Marker.IsActive() or Marker.CanUsePack() then
 				Marker.Scan()
 			end
 		end

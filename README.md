@@ -63,7 +63,7 @@ On Forever, Blizzard's native queue eye replaces the LFG proxy button, so it app
 - `/pkm language` - experimental Forever language test: shows your preferred language, datacenter, guild language and change cooldown
 - `/pkm language log` - list logged layers with the language settings at the time, plus group, guild, zone, loading-screen and world-refresh events, so you can see what came before a layer change; `/pkm language note <text>` adds your own note; `/pkm language options` lists languages; `/pkm language set <language> confirm` changes the account language, which the game then locks for its cooldown
 - `/pkm mark` - show smart marking status and your group's crowd control
-- `/pkm mark key <key>` - change the WoW Forever Mark Pack key (default **5**, held only while you lead a dungeon group); `/pkm mark key none` turns it off, `/pkm mark key default` restores 5. The account-wide "Prokin Mark Pack" macro does the same from an action bar
+- `/pkm mark key <key>` - change the Mark Pack key (default **5**). It marks the pack in front of you on your own, as a party leader, or as a raid leader or assistant; with nothing to mark, and in combat, the key still uses its action button; `/pkm mark key none` turns it off, `/pkm mark key default` restores 5. The account-wide "Prokin Mark Pack" macro does the same from an action bar
 - `/pkm mark on` / `/pkm mark off` - turn smart marking on or off; `/pkm mark anyone` also marks when you are not the leader, `/pkm mark leader` restores the default
 - `/pkm mark priority` / `/pkm mark ignore` - always kill your target's NPC first, or never mark it; repeat to undo
 - `/pkm mark clear` - remove raid icons (on Forever, use the Clear All Marks key binding)

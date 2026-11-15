@@ -1,3 +1,8 @@
+## v1.0.44
+- Mark Pack now works outside dungeon groups: on your own anywhere, as a party leader, and in raids as the raid leader or an assistant (the only raid members the game lets mark). Raid crowd control counts every class in the raid
+- The Mark Pack key (5) no longer takes over its action button. Near unmarked mobs, one press marks the pack; with nothing to mark, and all through combat, the key uses its usual action button. A key bound to something other than an action button is only taken inside instances
+- On The Burning Crusade Anniversary, Mark Pack is also available where automatic marking is off, such as raids and solo play
+
 ## v1.0.43
 - Fixed an `[ADDON_ACTION_FORBIDDEN]` error on WoW Forever at login: smart marking no longer registers the combat log, which Forever does not allow addons to use. Deaths are now seen on the mobs themselves
 - Fixed a "junk after document element" warning from `Bindings.xml`
