@@ -3727,6 +3727,9 @@ local function SyncOptionsWindow()
 	optionsFrame.enableGoldTracking:SetChecked(db.goldTracker and db.goldTracker.goldTrackingEnabled ~= false)
 	optionsFrame.showLayer:SetChecked(db.showLayer ~= false)
 	optionsFrame.showLayer:SetEnabled(IS_FOREVER)
+	local marker = _G.ProkinMinimapMarker
+	optionsFrame.smartMarking:SetChecked(marker and marker.GetSettings().enabled)
+	optionsFrame.smartMarking:SetEnabled(marker ~= nil)
 end
 
 local function ApplyOptionChange(callback)
@@ -3744,7 +3747,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(440, 722)
+	frame:SetSize(440, 754)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -4046,7 +4049,16 @@ local function EnsureOptionsWindow()
 		end
 	end)
 
-	frame.helpText:SetPoint('TOPLEFT', frame.showLayer, 'BOTTOMLEFT', 4, -14)
+	frame.smartMarking = CreateOptionsCheckbox(frame, 'Smart dungeon marking', 'When you lead a 5-player dungeon group, give each pack a kill order (Skull, then Cross) and crowd-control icons that suit your group. On WoW Forever, hover a mob and press the Mark Mob key binding. /pkm mark has more options.')
+	frame.smartMarking:SetPoint('TOPLEFT', frame.showLayer, 'BOTTOMLEFT', 0, -8)
+	frame.smartMarking:SetScript('OnClick', function(self)
+		local marker = _G.ProkinMinimapMarker
+		if marker then
+			marker.HandleSlash(self:GetChecked() and 'on' or 'off')
+		end
+	end)
+
+	frame.helpText:SetPoint('TOPLEFT', frame.smartMarking, 'BOTTOMLEFT', 4, -14)
 	frame.helpText:SetWidth(392)
 	frame.helpText:SetJustifyH('LEFT')
 	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button when alignment is off.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
@@ -4064,7 +4076,7 @@ OpenOptionsWindow = function()
 end
 
 local function ShowHelp()
-	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm layer [reset], /pkm hop, /pkm language [log|note <text>|options|set <language> confirm], /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
+	Print(string.format('Current size: %dx%d. Commands: /pkm size <number>, /pkm larger [step], /pkm smaller [step], /pkm reset, /pkm zonetext <number|reset>, /pkm resetmoon, /pkm buffs [unlock|lock|reset], /pkm layer [reset], /pkm hop, /pkm language [log|note <text>|options|set <language> confirm], /pkm mark [on|off|leader|anyone|priority|ignore|clear], /pkm options, /pkm ledger [character], /pkm expenses, or /pkm trackingdebug [on|off].', GetDatabase().size, GetDatabase().size))
 end
 
 local function HandleSlashCommand(message)
@@ -4131,6 +4143,14 @@ local function HandleSlashCommand(message)
 			Print('Layer log cleared.')
 		else
 			ForeverLayer.PrintLanguageStatus()
+		end
+		return
+	end
+
+	if command == 'mark' or command == 'marking' then
+		local marker = _G.ProkinMinimapMarker
+		if marker then
+			marker.HandleSlash(remainder)
 		end
 		return
 	end
