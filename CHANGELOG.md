@@ -1,3 +1,14 @@
+## v1.0.45
+- Smart marking and Mark Pack now follow the full standard target marker convention, using the crowd control of the classes in your party or raid:
+  - Skull: first kill target. Cross: second kill target
+  - Moon: Mage, Polymorph
+  - Square: Hunter, Freezing Trap
+  - Star: Rogue, Sap; without a rogue, the third kill target
+  - Diamond: Warlock, Banish, then Seduce, then Fear
+  - Triangle: Druid, Hibernate, then Entangling Roots; without a druid, an elite for the off-tank
+  - Circle: Priest, Shackle Undead, then Mind Control; without a priest, Circle goes on your tank (the player with the Tank role, or a raid's main tank) as the stack/tank marker
+- Crowd control that only holds certain creature types is placed first, so Freezing Trap no longer takes a demon a warlock could banish. In combat, the third kill target moves up to Cross when Skull dies
+
 ## v1.0.44
 - Mark Pack now works outside dungeon groups: on your own anywhere, as a party leader, and in raids as the raid leader or an assistant (the only raid members the game lets mark). Raid crowd control counts every class in the raid
 - The Mark Pack key (5) no longer takes over its action button. Near unmarked mobs, one press marks the pack; with nothing to mark, and all through combat, the key uses its usual action button. A key bound to something other than an action button is only taken inside instances
