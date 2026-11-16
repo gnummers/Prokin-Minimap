@@ -22,16 +22,45 @@ local STAR, CIRCLE, DIAMOND, TRIANGLE, MOON, SQUARE, CROSS, SKULL = 1, 2, 3, 4, 
 Marker.ICONS = { STAR = STAR, CIRCLE = CIRCLE, DIAMOND = DIAMOND, TRIANGLE = TRIANGLE, MOON = MOON, SQUARE = SQUARE, CROSS = CROSS, SKULL = SKULL }
 Marker.ICON_NAMES = { 'Star', 'Circle', 'Diamond', 'Triangle', 'Moon', 'Square', 'Cross', 'Skull' }
 
--- Crowd control in the order Prokin prefers to use it, with the creature types each can hold.
--- A nil type list means any type. Sap only works before the pull.
+-- The standard target marker convention: each crowd-control class has its own icon, and each
+-- icon lists that class's crowd control, most reliable first, with the creature types it holds
+-- (types = nil means any type, exclude lists types it cannot hold).
+--   Moon: Mage - Polymorph
+--   Square: Hunter - Freezing Trap
+--   Circle: Priest - Shackle Undead, then Mind Control; without a priest, Circle goes on the
+--     group's tank as the stack/tank marker
+--   Diamond: Warlock - Banish, then Seduce (Succubus), then Fear
+--   Triangle: Druid - Hibernate, then Entangling Roots
+--   Star: Rogue - Sap (before the pull)
+-- Without a rogue, Star marks the third kill target, and without a druid, Triangle marks an
+-- elite for the off-tank. order is the pass in which each class's first spell is placed: the
+-- spells that hold the fewest creature types go first, so Freezing Trap, which holds anything,
+-- does not take a demon a warlock could banish.
 Marker.CROWD_CONTROL = {
-	{ class = 'MAGE', icon = MOON, spell = 'Polymorph', types = { Humanoid = true, Beast = true } },
-	{ class = 'HUNTER', icon = SQUARE, spell = 'Freezing Trap' },
-	{ class = 'PRIEST', icon = CIRCLE, spell = 'Shackle Undead', types = { Undead = true } },
-	{ class = 'WARLOCK', icon = DIAMOND, spell = 'Banish', types = { Demon = true, Elemental = true } },
-	{ class = 'DRUID', icon = TRIANGLE, spell = 'Hibernate', types = { Beast = true, Dragonkin = true } },
-	{ class = 'ROGUE', icon = STAR, spell = 'Sap', types = { Humanoid = true }, prePullOnly = true },
+	{ class = 'MAGE', icon = MOON, order = 4, spells = {
+		{ name = 'Polymorph', types = { Humanoid = true, Beast = true } } } },
+	{ class = 'HUNTER', icon = SQUARE, order = 6, spells = {
+		{ name = 'Freezing Trap' } } },
+	{ class = 'PRIEST', icon = CIRCLE, order = 2, spells = {
+		{ name = 'Shackle Undead', types = { Undead = true } },
+		{ name = 'Mind Control', types = { Humanoid = true } } } },
+	{ class = 'WARLOCK', icon = DIAMOND, order = 1, spells = {
+		{ name = 'Banish', types = { Demon = true, Elemental = true } },
+		{ name = 'Seduce', types = { Humanoid = true } },
+		{ name = 'Fear', exclude = { Undead = true, Mechanical = true, Elemental = true } } } },
+	{ class = 'DRUID', icon = TRIANGLE, order = 3, spells = {
+		{ name = 'Hibernate', types = { Beast = true, Dragonkin = true } },
+		{ name = 'Entangling Roots' } } },
+	{ class = 'ROGUE', icon = STAR, order = 5, prePullOnly = true, spells = {
+		{ name = 'Sap', types = { Humanoid = true } } } },
 }
+for _, cc in ipairs(Marker.CROWD_CONTROL) do
+	local names = {}
+	for _, spell in ipairs(cc.spells) do
+		names[#names + 1] = spell.name
+	end
+	cc.spell = table.concat(names, ' / ')
+end
 
 local SKIPPED_TYPES = { Critter = true, Totem = true, ['Non-combat Pet'] = true, ['Gas Cloud'] = true, ['Wild Pet'] = true }
 local HEALER_CLASSES = { PALADIN = true, PRIEST = true, SHAMAN = true, DRUID = true }
@@ -276,8 +305,23 @@ local function SortByKillOrder(a, b)
 	return a.guid < b.guid
 end
 
-local function CanHold(cc, mob)
-	return not mob.boss and (cc.types == nil or (mob.creatureType ~= nil and cc.types[mob.creatureType] == true))
+local function CanHold(spell, mob)
+	if mob.boss then
+		return false
+	end
+	if spell.types and not (mob.creatureType ~= nil and spell.types[mob.creatureType]) then
+		return false
+	end
+	return not (spell.exclude and mob.creatureType ~= nil and spell.exclude[mob.creatureType])
+end
+
+local function HasClass(crowdControl, class)
+	for _, cc in ipairs(crowdControl or {}) do
+		if cc.class == class then
+			return true
+		end
+	end
+	return false
 end
 
 -- Works out which icon each mob should carry. mobs is a list from ReadUnit; assigned maps GUIDs
@@ -335,18 +379,29 @@ function Marker.Plan(mobs, assigned, crowdControl, inCombat)
 			end
 		end
 
-		if not taken[SKULL] then
-			local cross = holders[CROSS]
-			if cross then
-				changes[cross.guid] = SKULL
-				taken[SKULL] = true
-				taken[CROSS] = nil
-			elseif candidates[1] then
-				Give(table.remove(candidates, 1), SKULL)
-			end
+		-- The kill order moves up: when Skull dies, Cross becomes Skull, and without a rogue Star
+		-- (the third kill target) becomes Cross. A free kill icon goes to the next mob in the fight.
+		local chain = { SKULL, CROSS }
+		if not HasClass(crowdControl, 'ROGUE') then
+			chain[3] = STAR
 		end
-		if not taken[CROSS] and candidates[1] then
-			Give(table.remove(candidates, 1), CROSS)
+		for index, icon in ipairs(chain) do
+			if not taken[icon] then
+				local promoted
+				for later = index + 1, #chain do
+					local holder = holders[chain[later]]
+					if holder then
+						changes[holder.guid] = icon
+						holders[chain[later]], holders[icon] = nil, holder
+						taken[icon], taken[chain[later]] = true, nil
+						promoted = true
+						break
+					end
+				end
+				if not promoted and candidates[1] then
+					Give(table.remove(candidates, 1), icon)
+				end
+			end
 		end
 		return changes
 	end
@@ -362,14 +417,47 @@ function Marker.Plan(mobs, assigned, crowdControl, inCombat)
 		end
 	end
 
-	-- Crowd control goes to the most dangerous mobs left that it can hold.
+	-- Crowd control goes to the most dangerous mobs left that it can hold. Each class's first
+	-- spell is placed first, in order; then the classes still without a target try their other
+	-- spells (Mind Control, Seduce, Fear, Entangling Roots).
+	local function GiveCrowdControl(cc, spell)
+		for index, mob in ipairs(remaining) do
+			if CanHold(spell, mob) then
+				Give(table.remove(remaining, index), cc.icon)
+				return true
+			end
+		end
+	end
+
+	local ordered = {}
 	for _, cc in ipairs(crowdControl or {}) do
-		if not taken[cc.icon] then
-			for index, mob in ipairs(remaining) do
-				if CanHold(cc, mob) then
-					Give(table.remove(remaining, index), cc.icon)
-					break
-				end
+		ordered[#ordered + 1] = cc
+	end
+	table.sort(ordered, function(a, b) return (a.order or 9) < (b.order or 9) end)
+	for _, cc in ipairs(ordered) do
+		if not taken[cc.icon] and cc.spells and cc.spells[1] then
+			GiveCrowdControl(cc, cc.spells[1])
+		end
+	end
+	for _, cc in ipairs(ordered) do
+		for index = 2, #(cc.spells or {}) do
+			if taken[cc.icon] then
+				break
+			end
+			GiveCrowdControl(cc, cc.spells[index])
+		end
+	end
+
+	-- Star is the third kill target when no rogue saps, and Triangle marks an elite for the
+	-- off-tank when no druid holds one.
+	if not taken[STAR] and remaining[1] then
+		Give(table.remove(remaining, 1), STAR)
+	end
+	if not taken[TRIANGLE] then
+		for index, mob in ipairs(remaining) do
+			if mob.elite then
+				Give(table.remove(remaining, index), TRIANGLE)
+				break
 			end
 		end
 	end
@@ -509,6 +597,52 @@ function Marker.Scan()
 			end
 		end
 	end
+
+	if not inCombat and placed < Marker.MAX_MARKS_PER_SCAN then
+		local tankUnit, tankGUID = Marker.GetTankToMark(mobs, Marker.GetGroupCrowdControl())
+		if tankUnit and pcall(SetRaidTarget, tankUnit, CIRCLE) then
+			Marker.tankMarked[tankGUID] = true
+		end
+	end
+end
+
+-- Without a priest, Circle is the stack/tank marker: it goes on the player whose role is Tank (or
+-- a raid's main tank), once, so the group knows whom to stack on. Returns the tank's unit and GUID
+-- when Circle should be placed now.
+Marker.tankMarked = Marker.tankMarked or {}
+
+function Marker.GetTankToMark(mobs, crowdControl)
+	if HasClass(crowdControl, 'PRIEST') or not IsInGroup() then
+		return nil
+	end
+
+	-- Circle already on a mob (placed by someone else) is left there.
+	for _, mob in ipairs(mobs or {}) do
+		if mob.icon == CIRCLE then
+			return nil
+		end
+	end
+
+	local units = { 'player', 'party1', 'party2', 'party3', 'party4' }
+	if IsInRaid() then
+		units = {}
+		for index = 1, (SafeCall(GetNumGroupMembers) or 0) do
+			units[#units + 1] = 'raid' .. index
+		end
+	end
+	for _, unit in ipairs(units) do
+		if SafeCall(UnitExists, unit) then
+			local role = SafeCall(UnitGroupRolesAssigned, unit)
+			local mainTank = type(GetPartyAssignment) == 'function' and SafeCall(GetPartyAssignment, 'MAINTANK', unit)
+			if role == 'TANK' or mainTank then
+				local guid = SafeCall(UnitGUID, unit)
+				if guid and not Marker.tankMarked[guid] and not SafeCall(GetRaidTargetIndex, unit) then
+					return unit, guid
+				end
+				return nil
+			end
+		end
+	end
 end
 
 -- Picks the icon for one mob, for the Mark Mob key: what the pack plan gives it, or else the
@@ -633,7 +767,11 @@ function Marker.EnsurePackButton()
 		local pending = self.pending
 		if pending and #pending > 0 then
 			for _, entry in ipairs(pending) do
-				Marker.Remember(entry.guid, entry.icon)
+				if entry.tank then
+					Marker.tankMarked[entry.guid] = true
+				else
+					Marker.Remember(entry.guid, entry.icon)
+				end
 			end
 			self.pending = nil
 		elseif not self.fallthrough and not (type(InCombatLockdown) == 'function' and InCombatLockdown()) then
@@ -676,6 +814,12 @@ function Marker.UpdatePackButton(mobs, inCombat)
 	if mobs and not inCombat and Marker.CanUsePack() then
 		local changes = Marker.Plan(mobs, Marker.GetAssignedIcons(), Marker.GetGroupCrowdControl(), false)
 		text, pending = Marker.BuildPackMacro(mobs, changes)
+
+		local tankUnit, tankGUID = Marker.GetTankToMark(mobs, Marker.GetGroupCrowdControl())
+		if tankUnit then
+			text = text .. (text ~= '' and '\n' or '') .. string.format('/tm [@%s] !%d', tankUnit, CIRCLE)
+			pending[#pending + 1] = { guid = tankGUID, icon = CIRCLE, tank = true }
+		end
 	end
 
 	-- With nothing to mark, and all through combat, the key does its usual job.
@@ -912,7 +1056,7 @@ function Marker.PrintStatus()
 	for _, cc in ipairs(crowdControl) do
 		names[#names + 1] = cc.spell .. ' = ' .. Marker.ICON_NAMES[cc.icon]
 	end
-	Print('Kill order: Skull, then Cross. Crowd control: ' .. (#names > 0 and table.concat(names, ', ') or 'none in this group') .. '.')
+	Print('Kill order: Skull, then Cross' .. (HasClass(crowdControl, 'ROGUE') and '' or ', then Star') .. '. Crowd control: ' .. (#names > 0 and table.concat(names, ', ') or 'none in this group') .. '.' .. (HasClass(crowdControl, 'DRUID') and '' or ' Triangle marks an elite for the off-tank.') .. (HasClass(crowdControl, 'PRIEST') and '' or ' Circle goes on your tank as the stack marker.'))
 end
 
 -- Adds or removes the target's NPC ID from a settings list, returning the new state.
@@ -990,6 +1134,7 @@ function Marker.OnEvent(_, event, ...)
 	if event == 'PLAYER_ENTERING_WORLD' or event == 'GROUP_ROSTER_UPDATE' or event == 'PARTY_LEADER_CHANGED' then
 		if event == 'PLAYER_ENTERING_WORLD' then
 			Wipe(Marker.assigned)
+			Wipe(Marker.tankMarked)
 			if Marker.IS_FOREVER and type(C_Timer) == 'table' and C_Timer.After then
 				C_Timer.After(3, Marker.EnsurePackMacro)
 			end
