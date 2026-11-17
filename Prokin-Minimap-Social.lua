@@ -86,7 +86,7 @@ local function AddMemberRows(tooltip, rows)
 	end
 end
 
-local function AddFriends(tooltip)
+local function AddFriends(tooltip, leadingSpace)
 	local friendList = type(C_FriendList) == 'table' and C_FriendList or nil
 	local getCount = friendList and friendList.GetNumFriends or GetNumFriends
 	local getInfo = friendList and friendList.GetFriendInfoByIndex
@@ -177,11 +177,14 @@ local function AddFriends(tooltip)
 	end
 
 	table.sort(rows, function(a, b) return a.name:lower() < b.name:lower() end)
-	tooltip:AddLine(' ')
+	if leadingSpace then
+		tooltip:AddLine(' ')
+	end
 	tooltip:AddDoubleLine('Friends', string.format('%d online / %d', #rows, totalFriends + totalBattleNet), 1, 0.82, 0, 1, 0.82, 0)
 	if #rows == 0 then
 		tooltip:AddLine('No friends online.', 0.7, 0.7, 0.7)
 	else
+		tooltip:AddLine(' ')
 		AddMemberRows(tooltip, rows)
 	end
 end
@@ -238,14 +241,16 @@ local function RequestGuildRoster()
 	end
 end
 
-local function AddGuild(tooltip)
+local function AddGuild(tooltip, leadingSpace)
 	if not tooltip then
 		return
 	end
 	RequestGuildRoster()
 
 	local rows, online, total, guildName = GetGuildRows()
-	tooltip:AddLine(' ')
+	if leadingSpace then
+		tooltip:AddLine(' ')
+	end
 	if not rows then
 		tooltip:AddDoubleLine('Guild', '—', 1, 0.82, 0, 1, 0.82, 0)
 		tooltip:AddLine(guildName, 0.7, 0.7, 0.7)
@@ -255,32 +260,33 @@ local function AddGuild(tooltip)
 	if #rows == 0 then
 		tooltip:AddLine(total == 0 and 'Roster loading...' or 'No guild members online.', 0.7, 0.7, 0.7)
 	else
+		tooltip:AddLine(' ')
 		table.sort(rows, function(a, b) return a.name:lower() < b.name:lower() end)
 		AddMemberRows(tooltip, rows)
 	end
 end
 
-function Social.AddFriendsTooltipLines(tooltip)
+function Social.AddFriendsTooltipLines(tooltip, leadingSpace)
 	if not tooltip then
 		return
 	end
 	local currentZone = SafeCall(GetRealZoneText) or SafeCall(GetZoneText)
 	Social.currentZone = Display(currentZone, nil)
-	AddFriends(tooltip)
+	AddFriends(tooltip, leadingSpace)
 end
 
-function Social.AddGuildTooltipLines(tooltip)
+function Social.AddGuildTooltipLines(tooltip, leadingSpace)
 	local currentZone = SafeCall(GetRealZoneText) or SafeCall(GetZoneText)
 	Social.currentZone = Display(currentZone, nil)
-	AddGuild(tooltip)
+	AddGuild(tooltip, leadingSpace)
 end
 
 function Social.AddTooltipLines(tooltip)
 	if not tooltip then
 		return
 	end
-	Social.AddFriendsTooltipLines(tooltip)
-	Social.AddGuildTooltipLines(tooltip)
+	Social.AddFriendsTooltipLines(tooltip, true)
+	Social.AddGuildTooltipLines(tooltip, true)
 end
 
 local function CreateSocialButton(name, letter, red, green, blue, tooltipLines)
@@ -325,13 +331,6 @@ Social.Buttons = {
 	Friends = CreateSocialButton('ProkinMinimapFriendsButton', 'F', 0.18, 0.48, 0.95, Social.AddFriendsTooltipLines),
 	Guild = CreateSocialButton('ProkinMinimapGuildButton', 'G', 0.82, 0.58, 0.12, Social.AddGuildTooltipLines),
 }
-
-function Social.GetMinimapButtons()
-	return {
-		{ key = 'Prokin-Friends', button = Social.Buttons.Friends },
-		{ key = 'Prokin-Guild', button = Social.Buttons.Guild },
-	}
-end
 
 if type(CreateFrame) == 'function' then
 	local events = CreateFrame('Frame')

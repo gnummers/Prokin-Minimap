@@ -1,3 +1,7 @@
+## v1.0.49
+- Added dedicated Friends and Guild minimap hover buttons with individual online rosters and member locations; positioned the buttons below the minimap to the left of the player coordinates, with clearer spacing between section headers and roster rows
+- Aligned GearQuest Forever's standalone minimap button with the left-side icon column
+
 ## v1.0.48
 - Added separate Friends and Guild minimap hover buttons with individual online rosters and member locations
 - Aligned GearQuest Forever's standalone minimap button with the left-side icon column

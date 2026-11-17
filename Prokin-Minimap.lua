@@ -349,10 +349,14 @@ end
 
 -- Blizzard leaves the coordinates 18px below the map with their top edge floating,
 -- so pin them directly under the bottom border and centered on the map.
-local function ApplyPlayerCoordsLayout()
+local function GetPlayerCoordsFrame()
 	local cluster = _G.MinimapCluster
 	local container = cluster and cluster.MinimapContainer
-	local coords = container and container.PlayerCoords
+	return container and container.PlayerCoords
+end
+
+local function ApplyPlayerCoordsLayout()
+	local coords = GetPlayerCoordsFrame()
 	if not coords then
 		return
 	end
@@ -3147,6 +3151,32 @@ do
 	end
 end
 
+local function ApplySocialButtonLayout()
+	local social = _G.ProkinMinimapSocial
+	local buttons = social and social.Buttons
+	local friends = buttons and buttons.Friends
+	local guild = buttons and buttons.Guild
+	local coords = GetPlayerCoordsFrame()
+	if not Minimap or not friends or not guild then
+		return
+	end
+
+	for _, button in ipairs({ guild, friends }) do
+		NormalizeAddonButton(button)
+		button:RegisterForDrag()
+		button:ClearAllPoints()
+	end
+
+	if coords then
+		local scaleRatio = coords:GetEffectiveScale() / friends:GetEffectiveScale()
+		friends:SetPoint('RIGHT', coords, 'LEFT', -4 * scaleRatio, 0)
+		guild:SetPoint('RIGHT', friends, 'LEFT', -2, 0)
+	else
+		friends:SetPoint('BOTTOMLEFT', Minimap, 'BOTTOMLEFT', 0, -PLAYER_COORDS_OFFSET)
+		guild:SetPoint('RIGHT', friends, 'LEFT', -2, 0)
+	end
+end
+
 local function ApplyAddonButtonLayout()
 	if not Minimap or not IsAddonButtonAlignmentEnabled() then
 		return
@@ -3182,15 +3212,6 @@ local function ApplyAddonButtonLayout()
 			end
 		end
 		table.insert(entries, { key = 'GearQuestForever', button = gearQuestButton })
-	end
-
-	local social = _G.ProkinMinimapSocial
-	if social and type(social.GetMinimapButtons) == 'function' then
-		for _, entry in ipairs(social.GetMinimapButtons()) do
-			if entry.button then
-				table.insert(entries, entry)
-			end
-		end
 	end
 
 	table.sort(entries, function(a, b)
@@ -3649,6 +3670,7 @@ RefreshMinimap = function()
 	UpdateAddonButtonVisibility()
 	ApplyZoneLayout()
 	HideDefaultZoneHeader()
+	ApplySocialButtonLayout()
 	ApplyBlizzardWidgetLayout()
 	ApplyHybridMinimap()
 	InstallAutoMarkAssistCompatibility()
@@ -4027,7 +4049,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showServerTime = CreateOptionsCheckbox(frame, 'Show server time in the zone label', 'Append the server time to the custom zone text shown above the minimap.')
-	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin, Friends, Guild, GearQuest, and LibDBIcon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. These cannot be dragged while this is on.')
+	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin, GearQuest, and LibDBIcon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. Friends and Guild buttons stay below the map beside the player coordinates.')
 	frame.alignAddonButtons:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -8)
 	frame.alignAddonButtons:SetScript('OnClick', function(self)
 		local enabled = self:GetChecked() and true or false
