@@ -3164,6 +3164,35 @@ local function ApplyAddonButtonLayout()
 		end
 	end
 
+	-- GearQuest Forever uses its own named minimap button instead of LibDBIcon.
+	local gearQuestButton = _G.GearQuestMinimapButton
+	if gearQuestButton then
+		-- Let the shared layout size its actual icon rather than treating it as a background.
+		if not gearQuestButton.icon and gearQuestButton.gqIcon then
+			gearQuestButton.icon = gearQuestButton.gqIcon
+		end
+		if not gearQuestButton.__ProkinSetPointHooked and type(hooksecurefunc) == 'function' then
+			local ok = pcall(hooksecurefunc, gearQuestButton, 'SetPoint', function(self)
+				if not self.__ProkinApplyingLayout and IsAddonButtonAlignmentEnabled() then
+					ApplyAddonButtonLayout()
+				end
+			end)
+			if ok then
+				gearQuestButton.__ProkinSetPointHooked = true
+			end
+		end
+		table.insert(entries, { key = 'GearQuestForever', button = gearQuestButton })
+	end
+
+	local social = _G.ProkinMinimapSocial
+	if social and type(social.GetMinimapButtons) == 'function' then
+		for _, entry in ipairs(social.GetMinimapButtons()) do
+			if entry.button then
+				table.insert(entries, entry)
+			end
+		end
+	end
+
 	table.sort(entries, function(a, b)
 		return a.key < b.key
 	end)
@@ -3231,6 +3260,7 @@ local function ApplyAddonButtonLayout()
 		button:ClearAllPoints()
 		-- These have different parents, so convert the offsets from Minimap units.
 		local scaleRatio = Minimap:GetEffectiveScale() / button:GetEffectiveScale()
+		button.__ProkinApplyingLayout = true
 		button:SetPoint(
 			'CENTER',
 			Minimap,
@@ -3238,6 +3268,7 @@ local function ApplyAddonButtonLayout()
 			-column * ALIGNED_BUTTON.SPACING * scaleRatio,
 			-(topOffset + (row * spacing)) * scaleRatio
 		)
+		button.__ProkinApplyingLayout = nil
 	end
 end
 
@@ -3996,7 +4027,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showServerTime = CreateOptionsCheckbox(frame, 'Show server time in the zone label', 'Append the server time to the custom zone text shown above the minimap.')
-	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin button, LibDBIcon addon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. These cannot be dragged while this is on.')
+	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin, Friends, Guild, GearQuest, and LibDBIcon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. These cannot be dragged while this is on.')
 	frame.alignAddonButtons:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -8)
 	frame.alignAddonButtons:SetScript('OnClick', function(self)
 		local enabled = self:GetChecked() and true or false
@@ -4422,6 +4453,10 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 	end
 
 	RefreshMinimap()
+	if event == 'PLAYER_LOGIN' and C_Timer and type(C_Timer.After) == 'function' then
+		-- GearQuest Forever creates its non-LibDBIcon minimap button from PLAYER_LOGIN.
+		C_Timer.After(0, ApplyAddonButtonLayout)
+	end
 end)
 eventFrame:SetScript('OnUpdate', function(_, elapsed)
 	UpdateWidgetDrag()

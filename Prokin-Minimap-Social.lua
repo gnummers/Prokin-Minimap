@@ -238,14 +238,11 @@ local function RequestGuildRoster()
 	end
 end
 
-function Social.AddTooltipLines(tooltip)
+local function AddGuild(tooltip)
 	if not tooltip then
 		return
 	end
-	local currentZone = SafeCall(GetRealZoneText) or SafeCall(GetZoneText)
-	Social.currentZone = Display(currentZone, nil)
 	RequestGuildRoster()
-	AddFriends(tooltip)
 
 	local rows, online, total, guildName = GetGuildRows()
 	tooltip:AddLine(' ')
@@ -261,6 +258,79 @@ function Social.AddTooltipLines(tooltip)
 		table.sort(rows, function(a, b) return a.name:lower() < b.name:lower() end)
 		AddMemberRows(tooltip, rows)
 	end
+end
+
+function Social.AddFriendsTooltipLines(tooltip)
+	if not tooltip then
+		return
+	end
+	local currentZone = SafeCall(GetRealZoneText) or SafeCall(GetZoneText)
+	Social.currentZone = Display(currentZone, nil)
+	AddFriends(tooltip)
+end
+
+function Social.AddGuildTooltipLines(tooltip)
+	local currentZone = SafeCall(GetRealZoneText) or SafeCall(GetZoneText)
+	Social.currentZone = Display(currentZone, nil)
+	AddGuild(tooltip)
+end
+
+function Social.AddTooltipLines(tooltip)
+	if not tooltip then
+		return
+	end
+	Social.AddFriendsTooltipLines(tooltip)
+	Social.AddGuildTooltipLines(tooltip)
+end
+
+local function CreateSocialButton(name, letter, red, green, blue, tooltipLines)
+	if type(CreateFrame) ~= 'function' or not _G.UIParent then
+		return nil
+	end
+	local button = CreateFrame('Button', name, _G.UIParent)
+	button:SetSize(31, 31)
+	button:SetFrameStrata('MEDIUM')
+	button:SetFrameLevel(Minimap and Minimap:GetFrameLevel() + 30 or 30)
+	button.background = button:CreateTexture(nil, 'BACKGROUND')
+	button.background:SetTexture([[Interface\Minimap\UI-Minimap-Background]])
+	button.background:SetSize(24, 24)
+	button.background:SetPoint('CENTER')
+	button.icon = button:CreateTexture(nil, 'ARTWORK')
+	button.icon:SetColorTexture(red, green, blue, 1)
+	button.icon:SetSize(18, 18)
+	button.icon:SetPoint('CENTER')
+	button.border = button:CreateTexture(nil, 'BORDER')
+	button.border:SetTexture([[Interface\Minimap\MiniMap-TrackingBorder]])
+	button.border:SetSize(50, 50)
+	button.border:SetPoint('TOPLEFT')
+	button.label = button:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	button.label:SetPoint('CENTER', button, 'CENTER', 0, 0)
+	button.label:SetText(letter)
+	button.label:SetTextColor(1, 1, 1)
+	button:SetHighlightTexture([[Interface\Minimap\UI-Minimap-ZoomButton-Highlight]], 'ADD')
+	local highlight = button:GetHighlightTexture()
+	if highlight then
+		highlight:SetAllPoints(button)
+	end
+	button:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+		tooltipLines(GameTooltip)
+		GameTooltip:Show()
+	end)
+	button:SetScript('OnLeave', GameTooltip_Hide)
+	return button
+end
+
+Social.Buttons = {
+	Friends = CreateSocialButton('ProkinMinimapFriendsButton', 'F', 0.18, 0.48, 0.95, Social.AddFriendsTooltipLines),
+	Guild = CreateSocialButton('ProkinMinimapGuildButton', 'G', 0.82, 0.58, 0.12, Social.AddGuildTooltipLines),
+}
+
+function Social.GetMinimapButtons()
+	return {
+		{ key = 'Prokin-Friends', button = Social.Buttons.Friends },
+		{ key = 'Prokin-Guild', button = Social.Buttons.Guild },
+	}
 end
 
 if type(CreateFrame) == 'function' then

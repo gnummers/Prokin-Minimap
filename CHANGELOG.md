@@ -1,3 +1,7 @@
+## v1.0.48
+- Added separate Friends and Guild minimap hover buttons with individual online rosters and member locations
+- Aligned GearQuest Forever's standalone minimap button with the left-side icon column
+
 ## v1.0.47
 - Added Friends and Guild online rosters to the Prokin minimap button tooltip, including member locations, levels, classes, and status where the client provides them
 
