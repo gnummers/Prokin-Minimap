@@ -1,3 +1,9 @@
+## v1.0.52
+- Fixed Revelation fallback detection to read the aura spell ID from the correct `UnitBuff` return value
+- Added Wowhead Looter’s standalone minimap button to the left-side icon alignment
+- Moved the Friends and Guild hover buttons to the right of player coordinates
+- Widened the Options window text area and removed the extra border line beneath the Minimap Size slider
+
 ## v1.0.51
 - Revelation notifications now detect repeated aura applications and refreshes even while an earlier Revelation buff is still active
 

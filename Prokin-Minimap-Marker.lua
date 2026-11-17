@@ -1132,7 +1132,9 @@ function Marker.CheckRevelationAura()
 	local found = false
 	if type(UnitBuff) == 'function' then
 		for index = 1, 40 do
-			local name, _, _, _, _, _, _, _, _, spellID = UnitBuff('player', index)
+			-- UnitBuff's 10th return is nameplateShowPersonal (or the old
+			-- shouldConsolidate flag); spellID is the 11th return.
+			local name, _, _, _, _, _, _, _, _, _, spellID = UnitBuff('player', index)
 			if not name then break end
 			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
 				Marker.NotifyRevelation(spellID)

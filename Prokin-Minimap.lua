@@ -3169,11 +3169,11 @@ local function ApplySocialButtonLayout()
 
 	if coords then
 		local scaleRatio = coords:GetEffectiveScale() / friends:GetEffectiveScale()
-		friends:SetPoint('RIGHT', coords, 'LEFT', -4 * scaleRatio, 0)
-		guild:SetPoint('RIGHT', friends, 'LEFT', -2, 0)
+		friends:SetPoint('LEFT', coords, 'RIGHT', 4 * scaleRatio, 0)
+		guild:SetPoint('LEFT', friends, 'RIGHT', 2, 0)
 	else
 		friends:SetPoint('BOTTOMLEFT', Minimap, 'BOTTOMLEFT', 0, -PLAYER_COORDS_OFFSET)
-		guild:SetPoint('RIGHT', friends, 'LEFT', -2, 0)
+		guild:SetPoint('LEFT', friends, 'RIGHT', 2, 0)
 	end
 end
 
@@ -3212,6 +3212,22 @@ local function ApplyAddonButtonLayout()
 			end
 		end
 		table.insert(entries, { key = 'GearQuestForever', button = gearQuestButton })
+	end
+
+	-- Wowhead Looter uses a standalone wlMinimapButton instead of LibDBIcon.
+	local wowheadButton = _G.wlMinimapButton or _G.WowheadLooterMinimapButton or _G.WowheadLooterMinimap
+	if wowheadButton then
+		if not wowheadButton.__ProkinSetPointHooked and type(hooksecurefunc) == 'function' then
+			local ok = pcall(hooksecurefunc, wowheadButton, 'SetPoint', function(self)
+				if not self.__ProkinApplyingLayout and IsAddonButtonAlignmentEnabled() then
+					ApplyAddonButtonLayout()
+				end
+			end)
+			if ok then
+				wowheadButton.__ProkinSetPointHooked = true
+			end
+		end
+		table.insert(entries, { key = 'WowheadLooter', button = wowheadButton })
 	end
 
 	table.sort(entries, function(a, b)
@@ -3700,7 +3716,7 @@ local function CreateOptionsCheckbox(parent, label, tooltipText)
 	check.text = check:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
 	check.text:SetPoint('LEFT', check, 'RIGHT', 2, 1)
 	check.text:SetJustifyH('LEFT')
-	check.text:SetWidth(360)
+	check.text:SetWidth(420)
 	check.text:SetWordWrap(true)
 	check.text:SetText(label)
 
@@ -3809,7 +3825,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(440, 754)
+	frame:SetSize(500, 754)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -3837,7 +3853,7 @@ local function EnsureOptionsWindow()
 
 	frame.subtitle = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 	frame.subtitle:SetPoint('TOPLEFT', frame.title, 'BOTTOMLEFT', 0, -8)
-	frame.subtitle:SetWidth(392)
+	frame.subtitle:SetWidth(452)
 	frame.subtitle:SetJustifyH('LEFT')
 	frame.subtitle:SetText('Configure the minimap, addon button, and announcement behavior.')
 
@@ -3850,22 +3866,19 @@ local function EnsureOptionsWindow()
 
 	frame.sizeSliderBackground = CreateFrame('Frame', nil, frame, BackdropTemplateMixin and 'BackdropTemplate' or nil)
 	frame.sizeSliderBackground:SetPoint('TOPLEFT', frame.sizeLabel, 'BOTTOMLEFT', -4, -10)
-	frame.sizeSliderBackground:SetSize(396, 86)
+	frame.sizeSliderBackground:SetSize(456, 62)
 	frame.sizeSliderBackground:SetBackdrop({
 		bgFile = [[Interface\Tooltips\UI-Tooltip-Background]],
-		edgeFile = [[Interface\Tooltips\UI-Tooltip-Border]],
 		tile = true,
 		tileSize = 16,
-		edgeSize = 16,
 		insets = { left = 4, right = 4, top = 4, bottom = 4 }
 	})
 	frame.sizeSliderBackground:SetBackdropColor(0.02, 0.02, 0.02, 0.8)
-	frame.sizeSliderBackground:SetBackdropBorderColor(0.35, 0.35, 0.35, 1)
 
 	local sizeSlider = CreateFrame('Slider', 'ProkinMinimapOptionsSizeSlider', frame, BackdropTemplateMixin and 'BackdropTemplate' or nil)
 	sizeSlider:SetOrientation('HORIZONTAL')
 	sizeSlider:SetPoint('TOPLEFT', frame.sizeSliderBackground, 'TOPLEFT', 18, -22)
-	sizeSlider:SetWidth(250)
+	sizeSlider:SetWidth(280)
 	sizeSlider:SetHeight(15)
 	sizeSlider:SetHitRectInsets(0, 0, -10, 0)
 	sizeSlider:SetBackdrop(OPTION_SLIDER_BACKDROP)
@@ -4049,7 +4062,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.showServerTime = CreateOptionsCheckbox(frame, 'Show server time in the zone label', 'Append the server time to the custom zone text shown above the minimap.')
-	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin, GearQuest, and LibDBIcon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. Friends and Guild buttons stay below the map beside the player coordinates.')
+	frame.alignAddonButtons = CreateOptionsCheckbox(frame, 'Align addon minimap buttons on the left border', 'Give the Prokin, GearQuest, Wowhead Looter, and LibDBIcon buttons, Blizzard tracking button, and day/night icon the same size and line them up along the left border. Friends and Guild buttons stay below the map beside the player coordinates.')
 	frame.alignAddonButtons:SetPoint('TOPLEFT', frame.showAddonButton, 'BOTTOMLEFT', 0, -8)
 	frame.alignAddonButtons:SetScript('OnClick', function(self)
 		local enabled = self:GetChecked() and true or false
@@ -4143,7 +4156,7 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.helpText:SetPoint('TOPLEFT', frame.markPackKey, 'BOTTOMLEFT', -4, -8)
-	frame.helpText:SetWidth(392)
+	frame.helpText:SetWidth(452)
 	frame.helpText:SetJustifyH('LEFT')
 	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button when alignment is off.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
 	frame.helpText:SetHeight(58)
@@ -4457,6 +4470,8 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 		elseif arg1 == AUTOMARKASSIST_ADDON then
 			InstallAutoMarkAssistCompatibility()
 		else
+			-- Some addons create standalone minimap buttons during their own ADDON_LOADED.
+			ApplyAddonButtonLayout()
 			return
 		end
 	elseif event == 'MAIL_INBOX_UPDATE' or event == 'UPDATE_PENDING_MAIL' then
@@ -4476,7 +4491,7 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 
 	RefreshMinimap()
 	if event == 'PLAYER_LOGIN' and C_Timer and type(C_Timer.After) == 'function' then
-		-- GearQuest Forever creates its non-LibDBIcon minimap button from PLAYER_LOGIN.
+		-- GearQuest Forever and some standalone addon buttons are created from PLAYER_LOGIN.
 		C_Timer.After(0, ApplyAddonButtonLayout)
 	end
 end)

@@ -11,7 +11,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
 - Adds a draggable Prokin minimap button bordering the minimap with left-click role check, right-click options, and a hover tooltip that lists the current party or raid roles
 - Adds online Friends and Guild roster counts and member locations to the minimap button tooltip, following ElvUI's hover roster behavior
-- Adds dedicated Friends and Guild hover buttons below the minimap, to the left of the player coordinates, with class-colored online rosters and member locations
+- Adds dedicated Friends and Guild hover buttons below the minimap, to the right of the player coordinates, with class-colored online rosters and member locations
 - Shows the current session Gold Per Hour (GPH) in the Prokin minimap button tooltip
 - Uses TradeSkillMaster-style item pricing when available, with vendor fallback if TradeSkillMaster is not installed
 - Tracks gold income and expenses including repairs, postage, and crafting material costs
@@ -25,7 +25,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Includes MinimapButtonButton compatibility so those Blizzard widgets are not pulled into its collected button tray
 - Repositions the AutoMarkAssist minimap button to the square minimap edge without modifying AutoMarkAssist
 - Gives the Prokin button, LibDBIcon addon buttons, Blizzard tracking button, and Forever day/night icon one size and lines them up along the left border, with an option to turn this off and a slider for the spacing between them
-- Aligns GearQuest Forever's standalone minimap button with the rest of the addon icons along the left border
+- Aligns GearQuest Forever's and Wowhead Looter's standalone minimap buttons with the rest of the addon icons along the left border
 - Resizable zone text, from the options window or `/pkm zonetext`
 - With icon alignment off, lets you left-drag the Forever day/night icon anywhere on the minimap
 - Lets you move Blizzard's buff icons, with debuffs following underneath, from the options window or `/pkm buffs`
