@@ -3730,6 +3730,11 @@ local function SyncOptionsWindow()
 	local marker = _G.ProkinMinimapMarker
 	optionsFrame.smartMarking:SetChecked(marker and marker.GetSettings().enabled)
 	optionsFrame.smartMarking:SetEnabled(marker ~= nil)
+	if marker and optionsFrame.markPackKey then
+		local key = marker.GetPackKey()
+		optionsFrame.markPackKey:SetText(key or 'none')
+		optionsFrame.markPackKey:SetEnabled(marker ~= nil)
+	end
 end
 
 local function ApplyOptionChange(callback)
@@ -4049,7 +4054,7 @@ local function EnsureOptionsWindow()
 		end
 	end)
 
-	frame.smartMarking = CreateOptionsCheckbox(frame, 'Smart dungeon marking', 'When you lead a 5-player dungeon group, give each pack a kill order (Skull, then Cross) and crowd-control icons that suit your group. On WoW Forever, hover a mob and press the Mark Mob key binding. /pkm mark has more options.')
+	frame.smartMarking = CreateOptionsCheckbox(frame, 'Smart dungeon marking', 'Plan raid target icons for the nearby pack. WoW Forever and combat lockdown use secure key presses; Mark Pack remains available in combat for the pack prepared before lockdown. /pkm mark has more options.')
 	frame.smartMarking:SetPoint('TOPLEFT', frame.showLayer, 'BOTTOMLEFT', 0, -8)
 	frame.smartMarking:SetScript('OnClick', function(self)
 		local marker = _G.ProkinMinimapMarker
@@ -4058,7 +4063,29 @@ local function EnsureOptionsWindow()
 		end
 	end)
 
-	frame.helpText:SetPoint('TOPLEFT', frame.smartMarking, 'BOTTOMLEFT', 4, -14)
+	frame.markPackKeyLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	frame.markPackKeyLabel:SetPoint('TOPLEFT', frame.smartMarking, 'BOTTOMLEFT', 28, -7)
+	frame.markPackKeyLabel:SetText('Mark Pack key (Enter to save):')
+	frame.markPackKey = CreateFrame('EditBox', 'ProkinMinimapMarkPackKeyEditBox', frame, 'InputBoxTemplate')
+	frame.markPackKey:SetSize(90, 24)
+	frame.markPackKey:SetPoint('LEFT', frame.markPackKeyLabel, 'RIGHT', 8, 0)
+	frame.markPackKey:SetAutoFocus(false)
+	frame.markPackKey:SetMaxLetters(16)
+	frame.markPackKey:SetScript('OnEnterPressed', function(self)
+		local marker = _G.ProkinMinimapMarker
+		if marker then marker.SetPackKey(self:GetText()) end
+		self:ClearFocus()
+		SyncOptionsWindow()
+	end)
+	frame.markPackKey:SetScript('OnEscapePressed', function(self)
+		self:ClearFocus()
+		SyncOptionsWindow()
+	end)
+	frame.markPackKey:SetScript('OnEditFocusLost', function(self)
+		SyncOptionsWindow()
+	end)
+
+	frame.helpText:SetPoint('TOPLEFT', frame.markPackKey, 'BOTTOMLEFT', -4, -8)
 	frame.helpText:SetWidth(392)
 	frame.helpText:SetJustifyH('LEFT')
 	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button when alignment is off.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
