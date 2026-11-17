@@ -3561,6 +3561,10 @@ local function EnsureAddonMinimapButton()
 		end
 		-- Only add colorized gold tracker lines, avoid duplicates
 		AddGoldTrackerTooltipLine(GameTooltip)
+		local social = _G.ProkinMinimapSocial
+		if social and type(social.AddTooltipLines) == 'function' then
+			social.AddTooltipLines(GameTooltip)
+		end
 		AddGroupRoleTooltipLines(GameTooltip)
 		GameTooltip:Show()
 	end)

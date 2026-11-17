@@ -10,6 +10,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Minimap zoom in and out with the mouse wheel
 - Uses a pfUI-style custom zone label with a server-time suffix in `[HH:MM AM/PM]` format, plus runtime-safe suppression of Blizzard minimap header widgets so the floating bar, red X, and duplicate zone text do not appear
 - Adds a draggable Prokin minimap button bordering the minimap with left-click role check, right-click options, and a hover tooltip that lists the current party or raid roles
+- Adds online Friends and Guild roster counts and member locations to the minimap button tooltip, following ElvUI's hover roster behavior
 - Shows the current session Gold Per Hour (GPH) in the Prokin minimap button tooltip
 - Uses TradeSkillMaster-style item pricing when available, with vendor fallback if TradeSkillMaster is not installed
 - Tracks gold income and expenses including repairs, postage, and crafting material costs

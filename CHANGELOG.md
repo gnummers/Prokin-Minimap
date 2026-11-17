@@ -1,3 +1,6 @@
+## v1.0.47
+- Added Friends and Guild online rosters to the Prokin minimap button tooltip, including member locations, levels, classes, and status where the client provides them
+
 ## v1.0.46
 - Mark Pack's prepared secure macro now remains available after combat starts, so the nearby pack can still be marked during combat. Mark Mob continues to mark a hovered NPC at any time.
 - Added a Mark Pack key field to Prokin Minimap Options; press Enter to save. `/pkm mark key <key|none|default>` remains available.
