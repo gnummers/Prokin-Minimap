@@ -811,8 +811,8 @@ function Marker.UpdatePackButton(mobs, inCombat)
 	end
 
 	local text, pending = '', nil
-	if mobs and not inCombat and Marker.CanUsePack() then
-		local changes = Marker.Plan(mobs, Marker.GetAssignedIcons(), Marker.GetGroupCrowdControl(), false)
+	if mobs and Marker.CanUsePack() then
+		local changes = Marker.Plan(mobs, Marker.GetAssignedIcons(), Marker.GetGroupCrowdControl(), inCombat)
 		text, pending = Marker.BuildPackMacro(mobs, changes)
 
 		local tankUnit, tankGUID = Marker.GetTankToMark(mobs, Marker.GetGroupCrowdControl())
@@ -918,11 +918,9 @@ function Marker.GetPackKey()
 	return key or Marker.DEFAULT_PACK_KEY, false
 end
 
--- Prokin's key is an override binding, so the player's saved bindings never change. It is held
--- wherever Mark Pack can mark, except where The Burning Crusade Anniversary marks on its own.
--- When there is nothing to mark, and in combat, it passes the press on to the key's action
--- button. A key bound to something it cannot pass on is only held inside instances. Bindings
--- cannot change in combat, so a change waits for combat to end.
+-- Prokin's key is an override binding, so the player's saved bindings never change. The prepared
+-- Mark Pack macro remains bound through combat lockdown. When there is nothing to mark, its normal
+-- action button is passed through. Bindings cannot change in combat, so a change waits until combat ends.
 function Marker.ApplyPackBinding()
 	local button = Marker.EnsurePackButton()
 	if not button or type(SetOverrideBindingClick) ~= 'function' then
@@ -1110,7 +1108,65 @@ function Marker.HandleSlash(argument)
 	end
 end
 
+Marker.REVELATION_AURA_IDS = {
+	[1248808] = true, -- Mage
+	[1323377] = true, -- Priest
+	[1323392] = true, -- Warlock
+	[1323400] = true, -- Druid
+	[1323410] = true, -- Hunter
+	[1323418] = true, -- Shaman
+	[1323419] = true, -- Paladin
+}
+
+function Marker.CheckRevelationAura()
+	local getAura = type(C_UnitAuras) == 'table' and C_UnitAuras.GetPlayerAuraBySpellID
+	if type(getAura) == 'function' then
+		for spellID in pairs(Marker.REVELATION_AURA_IDS) do
+			local aura = SafeCall(getAura, spellID)
+			if aura then
+				Marker.NotifyRevelation(spellID)
+				return
+			end
+		end
+	end
+	local found = false
+	if type(UnitBuff) == 'function' then
+		for index = 1, 40 do
+			local name, _, _, _, _, _, _, _, _, spellID = UnitBuff('player', index)
+			if not name then break end
+			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
+				Marker.NotifyRevelation(spellID)
+				found = true
+				break
+			end
+		end
+	end
+	Marker.revelationWasActive = found
+end
+
+function Marker.NotifyRevelation(spellID)
+	if Marker.revelationWasActive then return end
+	Marker.revelationWasActive = true
+	local message = 'Revelation proc!'
+	if type(UIErrorsFrame) == 'table' and type(UIErrorsFrame.AddMessage) == 'function' then
+		UIErrorsFrame:AddMessage(message, 1, 0.82, 0.2, 1, 3)
+	elseif DEFAULT_CHAT_FRAME then
+		DEFAULT_CHAT_FRAME:AddMessage('|cffffd24a' .. message .. '|r')
+	end
+	if type(PlaySound) == 'function' then
+		pcall(PlaySound, 888)
+	end
+end
+
 function Marker.OnEvent(_, event, ...)
+	if event == 'UNIT_AURA' then
+		local unit = ...
+		if unit == 'player' then
+			Marker.CheckRevelationAura()
+		end
+		return
+	end
+
 	if event == 'COMBAT_LOG_EVENT_UNFILTERED' then
 		if type(CombatLogGetCurrentEventInfo) == 'function' then
 			local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
@@ -1133,6 +1189,7 @@ function Marker.OnEvent(_, event, ...)
 
 	if event == 'PLAYER_ENTERING_WORLD' or event == 'GROUP_ROSTER_UPDATE' or event == 'PARTY_LEADER_CHANGED' then
 		if event == 'PLAYER_ENTERING_WORLD' then
+			Marker.revelationWasActive = false
 			Wipe(Marker.assigned)
 			Wipe(Marker.tankMarked)
 			if Marker.IS_FOREVER and type(C_Timer) == 'table' and C_Timer.After then
@@ -1147,11 +1204,7 @@ function Marker.OnEvent(_, event, ...)
 		Marker.ApplyPackBinding()
 	end
 
-	-- Combat lockdown starts after this event, so the key is switched to its usual action now.
-	if event == 'PLAYER_REGEN_DISABLED' then
-		Marker.UpdatePackButton(nil, true)
-		return
-	end
+	-- The prepared Mark Pack macro and binding remain in place through combat lockdown.
 
 	if Marker.IsActive() or Marker.CanUsePack() then
 		Marker.Scan()
@@ -1169,7 +1222,7 @@ if type(CreateFrame) == 'function' then
 	Marker.EnsureKeyButton()
 	Marker.EnsurePackButton()
 	local events = CreateFrame('Frame')
-	for _, event in ipairs({ 'PLAYER_ENTERING_WORLD', 'GROUP_ROSTER_UPDATE', 'PARTY_LEADER_CHANGED', 'UPDATE_MOUSEOVER_UNIT', 'PLAYER_TARGET_CHANGED', 'NAME_PLATE_UNIT_ADDED', 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'ADDON_ACTION_FORBIDDEN', 'ADDON_ACTION_BLOCKED', 'UPDATE_BINDINGS' }) do
+	for _, event in ipairs({ 'UNIT_AURA', 'PLAYER_ENTERING_WORLD', 'GROUP_ROSTER_UPDATE', 'PARTY_LEADER_CHANGED', 'UPDATE_MOUSEOVER_UNIT', 'PLAYER_TARGET_CHANGED', 'NAME_PLATE_UNIT_ADDED', 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'ADDON_ACTION_FORBIDDEN', 'ADDON_ACTION_BLOCKED', 'UPDATE_BINDINGS' }) do
 		events:RegisterEvent(event)
 	end
 	-- WoW Forever restricts the combat log: registering it is a forbidden action there, even inside
@@ -1184,7 +1237,7 @@ if type(CreateFrame) == 'function' then
 		elapsedSinceScan = elapsedSinceScan + elapsed
 		if elapsedSinceScan >= Marker.SCAN_INTERVAL then
 			elapsedSinceScan = 0
-			-- Holds or releases the Mark Pack key as marking turns on and off.
+			-- Keeps the Mark Pack override current as settings and group state change.
 			if not Marker.bindingPending then
 				Marker.ApplyPackBinding()
 			end

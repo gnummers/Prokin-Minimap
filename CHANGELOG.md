@@ -1,3 +1,8 @@
+## v1.0.46
+- Mark Pack's prepared secure macro now remains available after combat starts, so the nearby pack can still be marked during combat. Mark Mob continues to mark a hovered NPC at any time.
+- Added a Mark Pack key field to Prokin Minimap Options; press Enter to save. `/pkm mark key <key|none|default>` remains available.
+- Added a visual notification and sound when Revelation activates. Detection uses WoW Forever's class-specific Revelation spell IDs.
+
 ## v1.0.45
 - Smart marking and Mark Pack now follow the full standard target marker convention, using the crowd control of the classes in your party or raid:
   - Skull: first kill target. Cross: second kill target
