@@ -68,6 +68,56 @@ local function IsOnline(value)
 	return not IsSecret(value) and value == true
 end
 
+local function ResolveClassColorCode(className)
+	className = Display(className, nil)
+	if not className then
+		return nil
+	end
+
+	local classColors = RAID_CLASS_COLORS
+	if type(classColors) ~= 'table' then
+		return nil
+	end
+
+	local token = className:upper():gsub('[^A-Z]', '')
+	if not classColors[token] then
+		local function FindLocalizedClassToken(localizedNames)
+			if type(localizedNames) ~= 'table' then
+				return nil
+			end
+			for classToken, localizedName in pairs(localizedNames) do
+				if localizedName == className then
+					return classToken
+				end
+			end
+		end
+		token = FindLocalizedClassToken(LOCALIZED_CLASS_NAMES_MALE)
+			or FindLocalizedClassToken(LOCALIZED_CLASS_NAMES_FEMALE)
+			or token
+	end
+
+	local color = classColors[token]
+	if type(color) ~= 'table' then
+		return nil
+	end
+
+	local colorCode = Display(color.colorStr, nil)
+	if colorCode then
+		colorCode = colorCode:gsub('^|c', '')
+		if #colorCode == 6 then
+			colorCode = 'ff' .. colorCode
+		end
+		if colorCode:match('^%x%x%x%x%x%x%x%x$') then
+			return colorCode
+		end
+	end
+
+	local red, green, blue = tonumber(color.r), tonumber(color.g), tonumber(color.b)
+	if red and green and blue then
+		return string.format('ff%02x%02x%02x', math.floor(red * 255 + 0.5), math.floor(green * 255 + 0.5), math.floor(blue * 255 + 0.5))
+	end
+end
+
 local function AddMemberRows(tooltip, rows)
 	local visible = math.min(#rows, MAX_TOOLTIP_MEMBERS)
 	for index = 1, visible do
@@ -75,11 +125,12 @@ local function AddMemberRows(tooltip, rows)
 		local status = row.status and (' [' .. row.status .. ']') or ''
 		local detail = row.detail and ('  ' .. row.detail) or ''
 		local zone = row.zone or 'Location unavailable'
+		local name = row.classColor and ('|c' .. row.classColor .. row.name .. '|r') or row.name
 		local zoneR, zoneG, zoneB = 0.72, 0.72, 0.72
 		if row.zone and row.zone == Social.currentZone then
 			zoneR, zoneG, zoneB = 0.35, 1, 0.35
 		end
-		tooltip:AddDoubleLine(row.name .. status .. detail, zone, 0.9, 0.9, 0.9, zoneR, zoneG, zoneB)
+		tooltip:AddDoubleLine(name .. status .. detail, zone, 0.9, 0.9, 0.9, zoneR, zoneG, zoneB)
 	end
 	if #rows > visible then
 		tooltip:AddLine(string.format('... and %d more', #rows - visible), 0.7, 0.7, 0.7)
@@ -104,12 +155,15 @@ local function AddFriends(tooltip, leadingSpace)
 						local afk, dnd = IsOnline(Field(info, 'afk')), IsOnline(Field(info, 'dnd'))
 						local level = Field(info, 'level')
 						local className = Field(info, 'className')
+						local classFileName = Field(info, 'classFileName')
+						local classLabel = className or classFileName
 						local detail = level and ('Lv ' .. Display(level, '?')) or ''
-						if className then
-							detail = detail .. ' ' .. Display(className, '')
+						if classLabel then
+							detail = detail .. ' ' .. Display(classLabel, '')
 						end
 						rows[#rows + 1] = {
 							name = name,
+							classColor = ResolveClassColorCode(classFileName or className),
 							zone = Display(Field(info, 'area'), Display(Field(info, 'zone'), nil)),
 							detail = detail ~= '' and detail or nil,
 							status = afk and 'AFK' or (dnd and 'DND' or nil),
@@ -120,10 +174,12 @@ local function AddFriends(tooltip, leadingSpace)
 		elseif type(GetFriendInfo) == 'function' then
 			local name, level, className, area, connected, status = SafeCall(GetFriendInfo, index)
 			if IsOnline(connected) and name then
+				local displayClass = Display(className, nil)
 				rows[#rows + 1] = {
 					name = Display(name, 'Unknown'),
+					classColor = ResolveClassColorCode(displayClass),
 					zone = Display(area, nil),
-					detail = (level and ('Lv ' .. Display(level, '?')) or '') .. (className and (' ' .. Display(className, '')) or ''),
+					detail = (level and ('Lv ' .. Display(level, '?')) or '') .. (displayClass and (' ' .. displayClass) or ''),
 					status = type(status) == 'string' and status ~= '' and status or nil,
 				}
 			end
@@ -154,10 +210,13 @@ local function AddFriends(tooltip, leadingSpace)
 					end
 					local level = Field(info, 'characterLevel')
 					local class = Field(info, 'className')
+					local classFileName = Field(info, 'classFileName')
+					local classLabel = class or classFileName
 					rows[#rows + 1] = {
 						name = name,
+						classColor = ResolveClassColorCode(classFileName or class),
 						zone = zone,
-						detail = (level and ('Lv ' .. Display(level, '?')) or '') .. (class and (' ' .. Display(class, '')) or ''),
+						detail = (level and ('Lv ' .. Display(level, '?')) or '') .. (classLabel and (' ' .. Display(classLabel, '')) or ''),
 						status = IsOnline(Field(info, 'isGameAFK')) and 'AFK' or (IsOnline(Field(account, 'isAFK')) and 'AFK' or nil),
 					}
 					onlineBattleNet = onlineBattleNet + 1
@@ -200,15 +259,17 @@ local function GetGuildRows()
 	local totalMembers = total or 0
 	if type(GetGuildRosterInfo) == 'function' then
 		for index = 1, totalMembers do
-			local name, rank, _, level, _, zone, _, _, connected, status, className = SafeCall(GetGuildRosterInfo, index)
+			local name, rank, _, level, classDisplayName, zone, _, _, connected, status, classFileName = SafeCall(GetGuildRosterInfo, index)
 			if name and IsOnline(connected) then
+				local classLabel = Display(classDisplayName, nil) or Display(classFileName, nil)
 				local afk = status == 1 or status == 'AFK'
 				local dnd = status == 2 or status == 'DND'
 				rows[#rows + 1] = {
 					name = Display(name, 'Unknown'),
+					classColor = ResolveClassColorCode(classFileName or classDisplayName),
 					zone = Display(zone, nil),
 					detail = (level and ('Lv ' .. Display(level, '?')) or '')
-						.. (className and (' ' .. Display(className, '')) or '')
+						.. (classLabel and (' ' .. classLabel) or '')
 						.. (rank and (' — ' .. Display(rank, '')) or ''),
 					status = afk and 'AFK' or (dnd and 'DND' or nil),
 				}
