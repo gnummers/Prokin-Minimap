@@ -1,3 +1,6 @@
+## v1.0.51
+- Revelation notifications now detect repeated aura applications and refreshes even while an earlier Revelation buff is still active
+
 ## v1.0.50
 - Added class colors to character names in the Friends and Guild hover rosters, using class-file tokens and localized class-name fallbacks
 

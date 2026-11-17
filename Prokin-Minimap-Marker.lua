@@ -1144,8 +1144,53 @@ function Marker.CheckRevelationAura()
 	Marker.revelationWasActive = found
 end
 
-function Marker.NotifyRevelation(spellID)
-	if Marker.revelationWasActive then return end
+local function ReadRevelationUpdateField(object, key)
+	if type(object) ~= 'table' or IsSecret(object) then
+		return nil
+	end
+	local ok, value = pcall(function()
+		return object[key]
+	end)
+	if not ok or IsSecret(value) then
+		return nil
+	end
+	return value
+end
+
+local function CheckRevelationAuraUpdate(updateInfo)
+	if type(updateInfo) ~= 'table' or IsSecret(updateInfo) or ReadRevelationUpdateField(updateInfo, 'isFullUpdate') then
+		return false
+	end
+
+	local addedAuras = ReadRevelationUpdateField(updateInfo, 'addedAuras')
+	if type(addedAuras) == 'table' then
+		for _, aura in pairs(addedAuras) do
+			local spellID = ReadRevelationUpdateField(aura, 'spellId')
+			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
+				Marker.NotifyRevelation(spellID, true)
+				return true
+			end
+		end
+	end
+
+	local updatedAuraInstanceIDs = ReadRevelationUpdateField(updateInfo, 'updatedAuraInstanceIDs')
+	local unitAuras = type(C_UnitAuras) == 'table' and C_UnitAuras or nil
+	local getAuraByInstanceID = unitAuras and unitAuras.GetAuraDataByAuraInstanceID
+	if type(updatedAuraInstanceIDs) == 'table' and type(getAuraByInstanceID) == 'function' then
+		for _, auraInstanceID in pairs(updatedAuraInstanceIDs) do
+			local aura = SafeCall(getAuraByInstanceID, 'player', auraInstanceID)
+			local spellID = ReadRevelationUpdateField(aura, 'spellId')
+			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
+				Marker.NotifyRevelation(spellID, true)
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function Marker.NotifyRevelation(spellID, isRefresh)
+	if Marker.revelationWasActive and not isRefresh then return end
 	Marker.revelationWasActive = true
 	local message = 'Revelation proc!'
 	if type(UIErrorsFrame) == 'table' and type(UIErrorsFrame.AddMessage) == 'function' then
@@ -1160,9 +1205,11 @@ end
 
 function Marker.OnEvent(_, event, ...)
 	if event == 'UNIT_AURA' then
-		local unit = ...
+		local unit, updateInfo = ...
 		if unit == 'player' then
-			Marker.CheckRevelationAura()
+			if not CheckRevelationAuraUpdate(updateInfo) then
+				Marker.CheckRevelationAura()
+			end
 		end
 		return
 	end
