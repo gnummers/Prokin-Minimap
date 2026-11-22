@@ -325,6 +325,9 @@ GetDatabase = function()
 	if type(ProkinMinimapDB.showLayer) ~= 'boolean' then
 		ProkinMinimapDB.showLayer = true
 	end
+	if type(ProkinMinimapDB.showRevelationAlert) ~= 'boolean' then
+		ProkinMinimapDB.showRevelationAlert = true
+	end
 	local addonButtonSpacing = math.floor((tonumber(ProkinMinimapDB.addonButtonSpacing) or ALIGNED_BUTTON.SPACING) + 0.5)
 	ProkinMinimapDB.addonButtonSpacing = math.max(ALIGNED_BUTTON.MIN_SPACING, math.min(addonButtonSpacing, ALIGNED_BUTTON.MAX_SPACING))
 	local buffFramePosition = ProkinMinimapDB.buffFramePosition
@@ -3808,6 +3811,7 @@ local function SyncOptionsWindow()
 	optionsFrame.showMinimapBorder:SetChecked(db.showMinimapBorder ~= false)
 	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
 	optionsFrame.enableGoldTracking:SetChecked(db.goldTracker and db.goldTracker.goldTrackingEnabled ~= false)
+	optionsFrame.showRevelationAlert:SetChecked(db.showRevelationAlert ~= false)
 	optionsFrame.showLayer:SetChecked(db.showLayer ~= false)
 	optionsFrame.showLayer:SetEnabled(IS_FOREVER)
 	local marker = _G.ProkinMinimapMarker
@@ -3835,7 +3839,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(500, 776)
+	frame:SetSize(500, 810)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -4143,7 +4147,19 @@ local function EnsureOptionsWindow()
 
 	frame.helpText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 	frame.showLayer = CreateOptionsCheckbox(frame, 'Show experimental layer (WoW Forever)', 'Show the layer read from NPC data in the bottom-right corner of the minimap, and share it with AutoLayer. This is not an official layer number.')
-	frame.showLayer:SetPoint('TOPLEFT', frame.enableGoldTracking, 'BOTTOMLEFT', 0, -8)
+	frame.showRevelationAlert = CreateOptionsCheckbox(frame, 'Show Revelation proc alert', 'Show a pulsing banner in the middle of the screen, with a sound, when your Revelation weapon enchant procs. It stays up to 6 seconds, or until the buff fades.')
+	frame.showRevelationAlert:SetPoint('TOPLEFT', frame.enableGoldTracking, 'BOTTOMLEFT', 0, -8)
+	frame.showRevelationAlert:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showRevelationAlert = self:GetChecked() and true or false
+		end)
+		local marker = _G.ProkinMinimapMarker
+		if not self:GetChecked() and marker and marker.HideRevelationBanner then
+			marker.HideRevelationBanner()
+		end
+	end)
+
+	frame.showLayer:SetPoint('TOPLEFT', frame.showRevelationAlert, 'BOTTOMLEFT', 0, -8)
 	frame.showLayer:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showLayer = self:GetChecked() and true or false
@@ -4164,18 +4180,49 @@ local function EnsureOptionsWindow()
 
 	frame.markPackKeyLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 	frame.markPackKeyLabel:SetPoint('TOPLEFT', frame.smartMarking, 'BOTTOMLEFT', 28, -7)
-	frame.markPackKeyLabel:SetText('Mark Pack key (Enter to save):')
+	frame.markPackKeyLabel:SetText('Mark Pack key:')
 	frame.markPackKey = CreateFrame('EditBox', 'ProkinMinimapMarkPackKeyEditBox', frame, 'InputBoxTemplate')
 	frame.markPackKey:SetSize(90, 24)
 	frame.markPackKey:SetPoint('LEFT', frame.markPackKeyLabel, 'RIGHT', 8, 0)
 	frame.markPackKey:SetAutoFocus(false)
 	frame.markPackKey:SetMaxLetters(16)
-	frame.markPackKey:SetScript('OnEnterPressed', function(self)
+	-- Saves the typed key; an empty box turns the key off.
+	local function SaveMarkPackKey()
 		local marker = _G.ProkinMinimapMarker
-		if marker then marker.SetPackKey(self:GetText()) end
-		self:ClearFocus()
+		local key = string.match(frame.markPackKey:GetText() or '', '^%s*(.-)%s*$') or ''
+		if marker then marker.SetPackKey(key == '' and 'NONE' or key) end
+		frame.markPackKey:ClearFocus()
+		SyncOptionsWindow()
+	end
+	frame.markPackKey:SetScript('OnEnterPressed', SaveMarkPackKey)
+	frame.markPackKey:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText('Mark Pack key', 1, 1, 1)
+		GameTooltip:AddLine('The key that marks the nearby pack. Type a key name such as 5, F or SHIFT-5, then press Enter or Apply. Leave it empty or type NONE to turn it off. You can also bind Mark Pack in Key Bindings > AddOns > Prokin Minimap.', nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	frame.markPackKey:SetScript('OnLeave', GameTooltip_Hide)
+
+	frame.markPackKeyApply = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+	frame.markPackKeyApply:SetSize(60, 22)
+	frame.markPackKeyApply:SetPoint('LEFT', frame.markPackKey, 'RIGHT', 8, 0)
+	frame.markPackKeyApply:SetText('Apply')
+	frame.markPackKeyApply:SetScript('OnClick', SaveMarkPackKey)
+
+	frame.markPackKeyReset = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+	frame.markPackKeyReset:SetSize(60, 22)
+	frame.markPackKeyReset:SetPoint('LEFT', frame.markPackKeyApply, 'RIGHT', 6, 0)
+	frame.markPackKeyReset:SetText('Reset')
+	frame.markPackKeyReset:SetScript('OnClick', function()
+		local marker = _G.ProkinMinimapMarker
+		if marker then marker.SetPackKey('DEFAULT') end
+		frame.markPackKey:ClearFocus()
 		SyncOptionsWindow()
 	end)
+
+	frame.markPackKeyHint = frame:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
+	frame.markPackKeyHint:SetPoint('LEFT', frame.markPackKeyReset, 'RIGHT', 10, 0)
+	frame.markPackKeyHint:SetText('Default: 5')
 	frame.markPackKey:SetScript('OnEscapePressed', function(self)
 		self:ClearFocus()
 		SyncOptionsWindow()

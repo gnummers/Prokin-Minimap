@@ -1109,6 +1109,7 @@ function Marker.HandleSlash(argument)
 end
 
 Marker.REVELATION_AURA_IDS = {
+	[1248806] = true, -- From an earlier local build; not confirmed against the current client
 	[1248808] = true, -- Mage
 	[1323377] = true, -- Priest
 	[1323392] = true, -- Warlock
@@ -1144,6 +1145,9 @@ function Marker.CheckRevelationAura()
 		end
 	end
 	Marker.revelationWasActive = found
+	if not found then
+		Marker.HideRevelationBanner()
+	end
 end
 
 local function ReadRevelationUpdateField(object, key)
@@ -1191,14 +1195,117 @@ local function CheckRevelationAuraUpdate(updateInfo)
 	return false
 end
 
+-- The Revelation alert can be turned off in Options ("Show Revelation proc alert").
+function Marker.IsRevelationAlertEnabled()
+	return type(ProkinMinimapDB) ~= 'table' or ProkinMinimapDB.showRevelationAlert ~= false
+end
+
+-- A banner in the upper middle of the screen: the Revelation icon, "REVELATION!" and what the
+-- proc does, pulsing for REVELATION_BANNER_SECONDS or until the buff fades.
+Marker.REVELATION_BANNER_SECONDS = 6
+
+function Marker.EnsureRevelationBanner()
+	if Marker.revelationBanner or type(CreateFrame) ~= 'function' then
+		return Marker.revelationBanner
+	end
+
+	local banner = CreateFrame('Frame', 'ProkinMinimapRevelationAlert', UIParent)
+	banner:SetSize(260, 54)
+	banner:SetPoint('CENTER', UIParent, 'CENTER', 0, 180)
+	banner:SetFrameStrata('HIGH')
+	banner:EnableMouse(false)
+	banner:Hide()
+
+	banner.border = banner:CreateTexture(nil, 'BACKGROUND')
+	banner.border:SetPoint('TOPLEFT', banner, 'TOPLEFT', -2, 2)
+	banner.border:SetPoint('BOTTOMRIGHT', banner, 'BOTTOMRIGHT', 2, -2)
+	banner.border:SetColorTexture(0.95, 0.80, 0.10, 0.9)
+
+	banner.background = banner:CreateTexture(nil, 'BORDER')
+	banner.background:SetAllPoints(banner)
+	banner.background:SetColorTexture(0.05, 0.05, 0.05, 0.9)
+
+	banner.icon = banner:CreateTexture(nil, 'ARTWORK')
+	banner.icon:SetSize(36, 36)
+	banner.icon:SetPoint('LEFT', banner, 'LEFT', 10, 0)
+	banner.icon:SetTexture([[Interface\Icons\Spell_Nature_Lightningshield]])
+
+	banner.label = banner:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightLarge')
+	banner.label:SetPoint('LEFT', banner.icon, 'RIGHT', 10, 7)
+	banner.label:SetText('REVELATION!')
+	banner.label:SetTextColor(1, 0.9, 0.1)
+
+	banner.detail = banner:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	banner.detail:SetPoint('LEFT', banner.icon, 'RIGHT', 10, -11)
+	banner.detail:SetText('Next spell guaranteed crit')
+	banner.detail:SetTextColor(0.85, 0.85, 0.85)
+
+	-- The pulse is optional: without it the banner still shows, just without pulsing.
+	local pulse = banner.CreateAnimationGroup and banner:CreateAnimationGroup()
+	local fade = pulse and pulse.CreateAnimation and pulse:CreateAnimation('Alpha')
+	if fade then
+		pulse:SetLooping('BOUNCE')
+		fade:SetFromAlpha(1)
+		fade:SetToAlpha(0.35)
+		fade:SetDuration(0.4)
+		if fade.SetSmoothing then
+			fade:SetSmoothing('IN_OUT')
+		end
+		banner.pulse = pulse
+	end
+
+	Marker.revelationBanner = banner
+	return banner
+end
+
+function Marker.ShowRevelationBanner()
+	local banner = Marker.EnsureRevelationBanner()
+	if not banner then
+		return false
+	end
+
+	banner:Show()
+	if banner.pulse and not banner.pulse:IsPlaying() then
+		banner.pulse:Play()
+	end
+
+	-- Each proc restarts the timer; an older timer that fires later leaves the banner alone.
+	Marker.revelationBannerToken = (Marker.revelationBannerToken or 0) + 1
+	local token = Marker.revelationBannerToken
+	if type(C_Timer) == 'table' and C_Timer.After then
+		C_Timer.After(Marker.REVELATION_BANNER_SECONDS, function()
+			if Marker.revelationBannerToken == token then
+				Marker.HideRevelationBanner()
+			end
+		end)
+	end
+	return true
+end
+
+function Marker.HideRevelationBanner()
+	local banner = Marker.revelationBanner
+	if not banner then
+		return
+	end
+	if banner.pulse and banner.pulse:IsPlaying() then
+		banner.pulse:Stop()
+	end
+	banner:Hide()
+end
+
 function Marker.NotifyRevelation(spellID, isRefresh)
 	if Marker.revelationWasActive and not isRefresh then return end
 	Marker.revelationWasActive = true
+	if not Marker.IsRevelationAlertEnabled() then
+		return
+	end
 	local message = 'Revelation proc!'
-	if type(UIErrorsFrame) == 'table' and type(UIErrorsFrame.AddMessage) == 'function' then
-		UIErrorsFrame:AddMessage(message, 1, 0.82, 0.2, 1, 3)
-	elseif DEFAULT_CHAT_FRAME then
-		DEFAULT_CHAT_FRAME:AddMessage('|cffffd24a' .. message .. '|r')
+	if not Marker.ShowRevelationBanner() then
+		if type(UIErrorsFrame) == 'table' and type(UIErrorsFrame.AddMessage) == 'function' then
+			UIErrorsFrame:AddMessage(message, 1, 0.82, 0.2, 1, 3)
+		elseif DEFAULT_CHAT_FRAME then
+			DEFAULT_CHAT_FRAME:AddMessage('|cffffd24a' .. message .. '|r')
+		end
 	end
 	if type(PlaySound) == 'function' then
 		pcall(PlaySound, 888)

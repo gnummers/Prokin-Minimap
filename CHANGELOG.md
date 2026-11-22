@@ -1,3 +1,9 @@
+## v1.0.55
+- The Revelation proc alert is now a pulsing banner in the middle of the screen with the Revelation icon, "REVELATION!" and "Next spell guaranteed crit". It stays up to 6 seconds, or until the buff fades, and still plays a sound
+- Added a "Show Revelation proc alert" option to turn the alert off
+- Revelation detection also watches spell ID 1248806, from an earlier build
+- The Mark Pack key setting in Options now has Apply and Reset buttons, shows the default (5), and explains key names in its tooltip. Leaving the box empty turns the key off
+
 ## v1.0.54
 - Fixed the options window layout: the Zone Text Size and Addon Icon Spacing sliders no longer overlap each other or the buff icon buttons, and the help text at the bottom now wraps inside the window instead of running off the right edge
 
