@@ -315,6 +315,12 @@ GetDatabase = function()
 	if type(ProkinMinimapDB.alignAddonButtons) ~= 'boolean' then
 		ProkinMinimapDB.alignAddonButtons = true
 	end
+	if type(ProkinMinimapDB.showFriendsButton) ~= 'boolean' then
+		ProkinMinimapDB.showFriendsButton = true
+	end
+	if type(ProkinMinimapDB.showGuildButton) ~= 'boolean' then
+		ProkinMinimapDB.showGuildButton = true
+	end
 	ProkinMinimapDB.zoneTextSize = NormalizeZoneTextSize(ProkinMinimapDB.zoneTextSize)
 	if type(ProkinMinimapDB.showLayer) ~= 'boolean' then
 		ProkinMinimapDB.showLayer = true
@@ -3166,6 +3172,8 @@ local function ApplySocialButtonLayout()
 		button:RegisterForDrag()
 		button:ClearAllPoints()
 	end
+	friends:SetShown(GetDatabase().showFriendsButton ~= false)
+	guild:SetShown(GetDatabase().showGuildButton ~= false)
 
 	if coords then
 		local scaleRatio = coords:GetEffectiveScale() / friends:GetEffectiveScale()
@@ -3784,6 +3792,8 @@ local function SyncOptionsWindow()
 
 	optionsFrame.showAddonButton:SetChecked(db.showAddonButton ~= false)
 	optionsFrame.alignAddonButtons:SetChecked(db.alignAddonButtons ~= false)
+	optionsFrame.showFriendsButton:SetChecked(db.showFriendsButton ~= false)
+	optionsFrame.showGuildButton:SetChecked(db.showGuildButton ~= false)
 
 	local spacingSlider = optionsFrame.addonSpacingSlider
 	spacingSlider.__ProkinSyncing = true
@@ -4017,7 +4027,7 @@ local function EnsureOptionsWindow()
 	)
 
 	frame.addonSpacingLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	frame.addonSpacingLabel:SetPoint('TOPLEFT', frame.zoneTextLabel, 'BOTTOMLEFT', 0, -48)
+	frame.addonSpacingLabel:SetPoint('TOPLEFT', frame.zoneTextLabel, 'BOTTOMLEFT', 0, -18)
 	frame.addonSpacingLabel:SetText('Addon Icon Spacing')
 
 	local function SetAddonButtonSpacing(spacing)
@@ -4039,7 +4049,7 @@ local function EnsureOptionsWindow()
 	frame.showAddonButton = CreateOptionsCheckbox(frame, 'Show Prokin minimap button', 'Show or hide the Prokin minimap button around the square minimap border.')
 	frame.unlockBuffsButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
 	frame.unlockBuffsButton:SetSize(150, 22)
-	frame.unlockBuffsButton:SetPoint('TOPLEFT', frame.addonSpacingLabel, 'BOTTOMLEFT', 0, -48)
+	frame.unlockBuffsButton:SetPoint('TOPLEFT', frame.addonSpacingLabel, 'BOTTOMLEFT', 0, -18)
 	frame.unlockBuffsButton:SetScript('OnClick', function()
 		BuffIcons.SetUnlocked(not BuffIcons.IsUnlocked())
 		SyncOptionsWindow()
@@ -4074,7 +4084,25 @@ local function EnsureOptionsWindow()
 		end
 	end)
 
-	frame.showServerTime:SetPoint('TOPLEFT', frame.alignAddonButtons, 'BOTTOMLEFT', 0, -8)
+	frame.showFriendsButton = CreateOptionsCheckbox(frame, 'Show Friends button', 'Show or hide the Friends button beside the player coordinates below the minimap.')
+	frame.showFriendsButton.text:SetWidth(150)
+	frame.showFriendsButton:SetPoint('TOPLEFT', frame.alignAddonButtons, 'BOTTOMLEFT', 0, -8)
+	frame.showFriendsButton:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showFriendsButton = self:GetChecked() and true or false
+		end)
+	end)
+
+	frame.showGuildButton = CreateOptionsCheckbox(frame, 'Show Guild button', 'Show or hide the Guild button beside the player coordinates below the minimap.')
+	frame.showGuildButton.text:SetWidth(140)
+	frame.showGuildButton:SetPoint('LEFT', frame.showFriendsButton.text, 'RIGHT', 20, 0)
+	frame.showGuildButton:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showGuildButton = self:GetChecked() and true or false
+		end)
+	end)
+
+	frame.showServerTime:SetPoint('TOPLEFT', frame.showFriendsButton, 'BOTTOMLEFT', 0, -8)
 	frame.showServerTime:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showServerTime = self:GetChecked() and true or false

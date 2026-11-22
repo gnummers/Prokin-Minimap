@@ -1,3 +1,7 @@
+## v1.0.53
+- Added separate Options checkboxes to show or hide the Friends and Guild buttons; both remain visible by default
+- Tightened the Options layout so the new controls fit in the window
+
 ## v1.0.52
 - Fixed Revelation fallback detection to read the aura spell ID from the correct `UnitBuff` return value
 - Added Wowhead Looter’s standalone minimap button to the left-side icon alignment
