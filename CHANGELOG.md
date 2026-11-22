@@ -1,3 +1,6 @@
+## v1.0.54
+- Fixed the options window layout: the Zone Text Size and Addon Icon Spacing sliders no longer overlap each other or the buff icon buttons, and the help text at the bottom now wraps inside the window instead of running off the right edge
+
 ## v1.0.53
 - Added separate Options checkboxes to show or hide the Friends and Guild buttons; both remain visible by default
 - Tightened the Options layout so the new controls fit in the window
