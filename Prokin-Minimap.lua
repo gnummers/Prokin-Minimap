@@ -3839,7 +3839,7 @@ local function EnsureOptionsWindow()
 	end
 
 	local frame = CreateFrame('Frame', 'ProkinMinimapOptionsFrame', _G.UIParent, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-	frame:SetSize(500, 810)
+	frame:SetSize(500, 850)
 	frame:SetPoint('CENTER')
 	frame:SetFrameStrata('DIALOG')
 	frame:SetFrameLevel(200)
@@ -4236,9 +4236,29 @@ local function EnsureOptionsWindow()
 	frame.helpText:SetWidth(456)
 	frame.helpText:SetJustifyH('LEFT')
 	frame.helpText:SetText('Button controls: Left-click starts a role check, right-click opens these options, and Alt-Left-Drag repositions the button when alignment is off.\nGold tracking uses TradeSkillMaster-style pricing when available, with vendor fallback when TSM is not installed. Thanks to the TradeSkillMaster authors.')
-	frame.helpText:SetHeight(58)
+	-- No fixed height: the help text grows to fit its lines at the game's real font size.
 
-	frame:SetScript('OnShow', SyncOptionsWindow)
+	-- Fits the window to its contents once the game has laid them out, with a margin below the
+	-- help text. Font sizes and UI scale vary, so the window never relies on a fixed height alone.
+	function frame.FitToContents()
+		local top, bottom = frame:GetTop(), frame.helpText:GetBottom()
+		if not top or not bottom then
+			return
+		end
+		local needed = math.ceil(top - bottom + 18)
+		if needed > frame:GetHeight() + 0.5 or needed < frame:GetHeight() - 40 then
+			frame:SetHeight(math.max(needed, 400))
+		end
+	end
+
+	frame:SetScript('OnShow', function()
+		SyncOptionsWindow()
+		frame.FitToContents()
+		-- Text sizes are only final after the first frame is drawn.
+		if C_Timer and C_Timer.After then
+			C_Timer.After(0, frame.FitToContents)
+		end
+	end)
 	optionsFrame = frame
 end
 
