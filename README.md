@@ -79,7 +79,7 @@ The Gold Tracker provides detailed income and expense tracking:
 - `/pkm allcharacters` - display ledger summary for all characters on your account
 
 The tooltip on the Prokin minimap button displays:
-- **GPH**: Gold Per Hour (net income)
+- **GPH**: Gold Per Hour from realized session money changes, after tracked cash expenses
 - **Session Income**: Total gold earned
 - **Session Expense**: Total gold spent (repairs, postage, materials)
 - **Session Net**: Net income after expenses
@@ -109,12 +109,15 @@ The Gold Tracker provides comprehensive expense tracking alongside income tracki
 
 ### How Tracking Works
 
-- **Income** is tracked from:
+- **Session and daily totals** include:
   - Looting gold and items
   - Quest rewards
   - Vendor sales
   - Mail items and gold
   - Disenchant dust/shards
+
+- **GPH** is calculated from actual changes to the character's money balance. Estimated bag-item values are excluded until they become cash, preventing unsold loot from inflating gold per hour.
+- **Item values** use TSM's `dbmarket` price when available. If TSM is absent or has no usable price, the game vendor sell price is used; items without a known sell price are omitted from estimates.
 
 - **Expenses** are tracked from:
   - NPC repairs automatically detected via `GetRepairAllCost()`

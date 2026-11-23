@@ -5,6 +5,7 @@ local eventFrame = CreateFrame('Frame')
 local sessionStartedAt = 0
 local sessionIncomeCopper = 0
 local sessionExpenseCopper = 0
+local sessionCashNetCopper = 0
 local lastMoneyCopper
 local trackedInventoryCounts = {}
 local pendingItemIncome = {}
@@ -269,18 +270,21 @@ local function GetTrackedItemValue(itemRef)
 	end
 
 	local _, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfoCompat(itemLink)
-	if quality == 0 then
-		return sellPrice
-	end
-
 	if itemLink and type(TSM_API) == 'table' and type(TSM_API.ToItemString) == 'function' and type(TSM_API.GetCustomPriceValue) == 'function' then
-		local itemString = TSM_API.ToItemString(itemLink)
-		if itemString then
-			return TSM_API.GetCustomPriceValue(VALUE_PRICE_SOURCE, itemString)
+		local ok, itemString = pcall(TSM_API.ToItemString, itemLink)
+		if ok and itemString then
+			local priceOk, marketValue = pcall(TSM_API.GetCustomPriceValue, VALUE_PRICE_SOURCE, itemString)
+			if priceOk and type(marketValue) == 'number' and marketValue > 0 then
+				return marketValue
+			end
 		end
 	end
 
-	return sellPrice
+	-- Without a usable TSM market value, only count what the game will actually pay to a vendor.
+	if type(sellPrice) == 'number' and sellPrice > 0 then
+		return sellPrice
+	end
+	return nil
 end
 
 local function ProcessLootMessage(message)
@@ -297,6 +301,9 @@ local function UpdateMoneySnapshot()
 	local currentMoney = GetMoney() or 0
 	if lastMoneyCopper ~= nil then
 		local delta = currentMoney - lastMoneyCopper
+		if IsGoldTrackingEnabled() then
+			sessionCashNetCopper = sessionCashNetCopper + delta
+		end
 		if delta > 0 then
 			AddIncome(delta)
 		elseif delta < 0 then
@@ -555,6 +562,7 @@ end
 function tracker:ResetSessionTracking()
 	sessionIncomeCopper = 0
 	sessionExpenseCopper = 0
+	sessionCashNetCopper = 0
 	sessionStartedAt = GetTime()
 	lastMoneyCopper = GetMoney() or 0
 	trackedInventoryCounts = SnapshotInventory()
@@ -566,7 +574,7 @@ function tracker:GetSessionGPH()
 		return 0
 	end
 
-	return math.floor((self:GetSessionNetIncome() / elapsed) * 3600 + 0.5)
+	return math.floor((sessionCashNetCopper / elapsed) * 3600 + 0.5)
 end
 
 function tracker:GetTooltipLine()
@@ -608,6 +616,7 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1, arg2)
 		sessionStartedAt = GetTime()
 		sessionIncomeCopper = 0
 		sessionExpenseCopper = 0
+		sessionCashNetCopper = 0
 		lastMoneyCopper = GetMoney() or 0
 		trackedInventoryCounts = SnapshotInventory()
 		wipe(pendingItemIncome)

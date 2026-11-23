@@ -1,5 +1,14 @@
+## v1.0.58
+- Added an Options switch to show or hide Friends and Guild roster output in the Prokin icon tooltip
+- Added a matching green and gold Guild button badge based on the supplied Friends artwork
+- Fixed Revelation proc detection to react immediately to aura applications and refreshes, including localized aura names and combat log events where available
+- GPH now uses realized session money changes; item estimates remain in session totals but no longer count as gold earned before sale
+- TSM item pricing now safely falls back to vendor value when a market value is unavailable; without TSM, vendor values are used
+
 ## v1.0.57
-- Removed AutoLayer integration and all layer detection, layer display, layer logging, language-based layer tools, and layer-changing chat notices
+- Removed the experimental WoW Forever layer detector and minimap display, plus the AutoLayer requests and Hopper integration
+- Removed layer history, group-zone notices, and the language-based layer tools, including `/pkm layer`, `/pkm hop`, and `/pkm language`
+- Removed the layer option and added cleanup for legacy layer data on load
 
 ## v1.0.56
 - The options window now sizes itself to fit everything in it, so the help text at the bottom is no longer cut off at the window's edge, whatever your UI scale. It also starts 40 px taller

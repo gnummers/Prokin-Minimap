@@ -1119,35 +1119,14 @@ Marker.REVELATION_AURA_IDS = {
 	[1323419] = true, -- Paladin
 }
 
-function Marker.CheckRevelationAura()
-	local getAura = type(C_UnitAuras) == 'table' and C_UnitAuras.GetPlayerAuraBySpellID
-	if type(getAura) == 'function' then
-		for spellID in pairs(Marker.REVELATION_AURA_IDS) do
-			local aura = SafeCall(getAura, spellID)
-			if aura then
-				Marker.NotifyRevelation(spellID)
-				return
-			end
-		end
+local function IsRevelationAura(spellID, auraName)
+	if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
+		return true
 	end
-	local found = false
-	if type(UnitBuff) == 'function' then
-		for index = 1, 40 do
-			-- UnitBuff's 10th return is nameplateShowPersonal (or the old
-			-- shouldConsolidate flag); spellID is the 11th return.
-			local name, _, _, _, _, _, _, _, _, _, spellID = UnitBuff('player', index)
-			if not name then break end
-			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
-				Marker.NotifyRevelation(spellID)
-				found = true
-				break
-			end
-		end
+	if type(auraName) == 'string' and not IsSecret(auraName) then
+		return auraName:lower():find('revelation', 1, true) ~= nil
 	end
-	Marker.revelationWasActive = found
-	if not found then
-		Marker.HideRevelationBanner()
-	end
+	return false
 end
 
 local function ReadRevelationUpdateField(object, key)
@@ -1163,6 +1142,52 @@ local function ReadRevelationUpdateField(object, key)
 	return value
 end
 
+function Marker.CheckRevelationAura()
+	local getAura = type(C_UnitAuras) == 'table' and C_UnitAuras.GetPlayerAuraBySpellID
+	if type(getAura) == 'function' then
+		for spellID in pairs(Marker.REVELATION_AURA_IDS) do
+			local aura = SafeCall(getAura, spellID)
+			local auraSpellID = ReadRevelationUpdateField(aura, 'spellId')
+			local auraName = ReadRevelationUpdateField(aura, 'name')
+			if aura and IsRevelationAura(auraSpellID, auraName) then
+				Marker.NotifyRevelation(spellID)
+				return
+			end
+		end
+	end
+	local getAuraByIndex = type(C_UnitAuras) == 'table' and C_UnitAuras.GetAuraDataByIndex
+	if type(getAuraByIndex) == 'function' then
+		for index = 1, 40 do
+			local aura = SafeCall(getAuraByIndex, 'player', index, 'HELPFUL')
+			if not aura then break end
+			local spellID = ReadRevelationUpdateField(aura, 'spellId')
+			local name = ReadRevelationUpdateField(aura, 'name')
+			if IsRevelationAura(spellID, name) then
+				Marker.NotifyRevelation(spellID)
+				return
+			end
+		end
+	end
+	local found = false
+	if type(UnitBuff) == 'function' then
+		for index = 1, 40 do
+			-- UnitBuff's 10th return is nameplateShowPersonal (or the old
+			-- shouldConsolidate flag); spellID is the 11th return.
+			local name, _, _, _, _, _, _, _, _, _, spellID = UnitBuff('player', index)
+			if not name then break end
+			if IsRevelationAura(spellID, name) then
+				Marker.NotifyRevelation(spellID)
+				found = true
+				break
+			end
+		end
+	end
+	Marker.revelationWasActive = found
+	if not found then
+		Marker.HideRevelationBanner()
+	end
+end
+
 local function CheckRevelationAuraUpdate(updateInfo)
 	if type(updateInfo) ~= 'table' or IsSecret(updateInfo) or ReadRevelationUpdateField(updateInfo, 'isFullUpdate') then
 		return false
@@ -1172,7 +1197,7 @@ local function CheckRevelationAuraUpdate(updateInfo)
 	if type(addedAuras) == 'table' then
 		for _, aura in pairs(addedAuras) do
 			local spellID = ReadRevelationUpdateField(aura, 'spellId')
-			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
+			if IsRevelationAura(spellID, ReadRevelationUpdateField(aura, 'name')) then
 				Marker.NotifyRevelation(spellID, true)
 				return true
 			end
@@ -1186,7 +1211,7 @@ local function CheckRevelationAuraUpdate(updateInfo)
 		for _, auraInstanceID in pairs(updatedAuraInstanceIDs) do
 			local aura = SafeCall(getAuraByInstanceID, 'player', auraInstanceID)
 			local spellID = ReadRevelationUpdateField(aura, 'spellId')
-			if not IsSecret(spellID) and Marker.REVELATION_AURA_IDS[spellID] then
+			if IsRevelationAura(spellID, ReadRevelationUpdateField(aura, 'name')) then
 				Marker.NotifyRevelation(spellID, true)
 				return true
 			end
@@ -1325,7 +1350,13 @@ function Marker.OnEvent(_, event, ...)
 
 	if event == 'COMBAT_LOG_EVENT_UNFILTERED' then
 		if type(CombatLogGetCurrentEventInfo) == 'function' then
-			local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
+			local _, subevent, _, _, _, _, _, destGUID, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo()
+			if not IsSecret(subevent) and (subevent == 'SPELL_AURA_APPLIED' or subevent == 'SPELL_AURA_REFRESH')
+				and not IsSecret(destGUID) and destGUID == UnitGUID('player')
+				and IsRevelationAura(spellID, spellName) then
+				Marker.NotifyRevelation(spellID, subevent == 'SPELL_AURA_REFRESH')
+				return
+			end
 			if not IsSecret(subevent) and subevent == 'UNIT_DIED' and not IsSecret(destGUID) then
 				Marker.OnUnitDied(destGUID)
 			end
