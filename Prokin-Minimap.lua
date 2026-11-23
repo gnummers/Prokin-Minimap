@@ -2833,7 +2833,7 @@ local function EnsureAddonMinimapButton()
 		-- Only add colorized gold tracker lines, avoid duplicates
 		AddGoldTrackerTooltipLine(GameTooltip)
 		local social = _G.ProkinMinimapSocial
-		if social and type(social.AddTooltipLines) == 'function' then
+		if GetDatabase().showSocialTooltip ~= false and social and type(social.AddTooltipLines) == 'function' then
 			social.AddTooltipLines(GameTooltip)
 		end
 		AddGroupRoleTooltipLines(GameTooltip)
@@ -2989,6 +2989,7 @@ local function SyncOptionsWindow()
 	optionsFrame.alignAddonButtons:SetChecked(db.alignAddonButtons ~= false)
 	optionsFrame.showFriendsButton:SetChecked(db.showFriendsButton ~= false)
 	optionsFrame.showGuildButton:SetChecked(db.showGuildButton ~= false)
+	optionsFrame.showSocialTooltip:SetChecked(db.showSocialTooltip ~= false)
 
 	local spacingSlider = optionsFrame.addonSpacingSlider
 	spacingSlider.__ProkinSyncing = true
@@ -3297,7 +3298,15 @@ local function EnsureOptionsWindow()
 		end)
 	end)
 
-	frame.showServerTime:SetPoint('TOPLEFT', frame.showFriendsButton, 'BOTTOMLEFT', 0, -8)
+	frame.showSocialTooltip = CreateOptionsCheckbox(frame, 'Show Friends and Guild output in tooltip', 'Show or hide the online Friends and Guild roster details when you hover over the Prokin minimap icon.')
+	frame.showSocialTooltip:SetPoint('TOPLEFT', frame.showFriendsButton, 'BOTTOMLEFT', 0, -8)
+	frame.showSocialTooltip:SetScript('OnClick', function(self)
+		ApplyOptionChange(function(db)
+			db.showSocialTooltip = self:GetChecked() and true or false
+		end)
+	end)
+
+	frame.showServerTime:SetPoint('TOPLEFT', frame.showSocialTooltip, 'BOTTOMLEFT', 0, -8)
 	frame.showServerTime:SetScript('OnClick', function(self)
 		ApplyOptionChange(function(db)
 			db.showServerTime = self:GetChecked() and true or false

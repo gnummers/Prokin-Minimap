@@ -2,7 +2,7 @@
 ## Title: Prokin-Minimap
 ## Notes: Smart dungeon marking, and squares the minimap for The Burning Crusade Anniversary and World of Warcraft: Forever using the ElvUI mask method.
 ## Author: Prokin
-## Version: 1.0.57
+## Version: 1.0.58
 ## SavedVariables: ProkinMinimapDB
 ## IconTexture: Interface\AddOns\Prokin-Minimap\Media\ProkinFaceIcon.png
 

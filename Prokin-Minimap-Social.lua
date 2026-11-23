@@ -363,8 +363,13 @@ local function CreateSocialButton(name, letter, red, green, blue, tooltipLines)
 	button.background:SetSize(24, 24)
 	button.background:SetPoint('CENTER')
 	button.icon = button:CreateTexture(nil, 'ARTWORK')
-	button.icon:SetColorTexture(red, green, blue, 1)
-	button.icon:SetSize(18, 18)
+	if name == 'ProkinMinimapGuildButton' then
+		button.icon:SetTexture([[Interface\AddOns\Prokin-Minimap\Media\ProkinGuildButton]])
+		button.icon:SetSize(24, 24)
+	else
+		button.icon:SetColorTexture(red, green, blue, 1)
+		button.icon:SetSize(18, 18)
+	end
 	button.icon:SetPoint('CENTER')
 	button.border = button:CreateTexture(nil, 'BORDER')
 	button.border:SetTexture([[Interface\Minimap\MiniMap-TrackingBorder]])
@@ -374,6 +379,9 @@ local function CreateSocialButton(name, letter, red, green, blue, tooltipLines)
 	button.label:SetPoint('CENTER', button, 'CENTER', 0, 0)
 	button.label:SetText(letter)
 	button.label:SetTextColor(1, 1, 1)
+	if name == 'ProkinMinimapGuildButton' then
+		button.label:Hide()
+	end
 	button:SetHighlightTexture([[Interface\Minimap\UI-Minimap-ZoomButton-Highlight]], 'ADD')
 	local highlight = button:GetHighlightTexture()
 	if highlight then
