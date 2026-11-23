@@ -1,3 +1,6 @@
+## v1.0.56
+- The options window now sizes itself to fit everything in it, so the help text at the bottom is no longer cut off at the window's edge, whatever your UI scale. It also starts 40 px taller
+
 ## v1.0.55
 - The Revelation proc alert is now a pulsing banner in the middle of the screen with the Revelation icon, "REVELATION!" and "Next spell guaranteed crit". It stays up to 6 seconds, or until the buff fades, and still plays a sound
 - Added a "Show Revelation proc alert" option to turn the alert off
