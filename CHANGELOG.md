@@ -1,3 +1,6 @@
+## v1.0.57
+- Removed AutoLayer integration and all layer detection, layer display, layer logging, language-based layer tools, and layer-changing chat notices
+
 ## v1.0.56
 - The options window now sizes itself to fit everything in it, so the help text at the bottom is no longer cut off at the window's edge, whatever your UI scale. It also starts 40 px taller
 

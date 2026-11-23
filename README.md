@@ -29,7 +29,6 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Resizable zone text, from the options window or `/pkm zonetext`
 - With icon alignment off, lets you left-drag the Forever day/night icon anywhere on the minimap
 - Lets you move Blizzard's buff icons, with debuffs following underneath, from the options window or `/pkm buffs`
-- Experimental WoW Forever layer display in the bottom-right corner of the minimap, read from NPC data and shared with AutoLayer. This is not an official layer number
 - Experimental WoW Forever Auction House upgrade scan: a **Prokin** tab on the Auction House lists the biggest upgrade and best value for every equipment slot, scored with Pawn scales or RestedXP Guides stat weights (one of them must be installed). Options picks the weights, class, specialization, required level range and stat filters. **Show** opens the listing in Blizzard's Buy view, where you confirm the purchase, and Shift+Right-click links the item in chat
 - Smart dungeon marking when you lead a 5-player dungeon group: Skull and Cross for the kill order, and crowd-control icons that match your group's Polymorph, Freezing Trap, Shackle Undead, Banish, Hibernate and Sap. It knows every 5-player dungeon boss and over 100 dangerous trash mobs (healers, summoners, fears and hard-hitting casters) to kill first. Automatic on The Burning Crusade Anniversary; on WoW Forever, Mark Pack marks a prepared pack and remains usable through combat, while Mark Mob marks a hovered NPC
 - Saved minimap size with a default of **400x400**
@@ -61,17 +60,12 @@ On Forever, Blizzard's native queue eye replaces the LFG proxy button, so it app
 - `/pkm zonetext reset` - restore the default zone text size
 - `/pkm buffs` - unlock or lock the buff icons, then drag the blue box to move them
 - `/pkm buffs reset` - clear the saved buff position, then `/reload` to restore Blizzard's position
-- `/pkm layer` - show the experimental Forever layer details, or `/pkm layer reset` to clear it
-- On WoW Forever, a chat warning when your group leader is in another zone, since that invite cannot change your layer, or a reminder to press Refresh Now when they are in your zone
-- `/pkm language` - experimental Forever language test: shows your preferred language, datacenter, guild language and change cooldown
-- `/pkm language log` - list logged layers with the language settings at the time, plus group, guild, zone, loading-screen and world-refresh events, so you can see what came before a layer change; `/pkm language note <text>` adds your own note; `/pkm language options` lists languages; `/pkm language set <language> confirm` changes the account language, which the game then locks for its cooldown
 - `/pkm mark` - show smart marking status and your group's crowd control. Icons follow the standard convention: Skull and Cross kill first; Moon is Polymorph (Mage); Square is Freezing Trap (Hunter); Star is Sap (Rogue) or the third kill target; Diamond is Banish, Seduce or Fear (Warlock); Triangle is Hibernate or Entangling Roots (Druid) or the off-tank's elite; Circle is Shackle Undead or Mind Control (Priest), or the stack marker on your tank
 - `/pkm mark key <key>` - change the Mark Pack key (default **5**). You can also set it in Prokin Minimap Options. It marks the pack in front of you on your own, as a party leader, or as a raid leader or assistant; `/pkm mark key none` turns it off, `/pkm mark key default` restores 5. The account-wide "Prokin Mark Pack" macro does the same from an action bar
 - Revelation weapon enchant procs show a pulsing banner in the middle of the screen with a sound, until the buff fades or for up to 6 seconds. Turn it off with "Show Revelation proc alert" in Options.
 - `/pkm mark on` / `/pkm mark off` - turn smart marking on or off; `/pkm mark anyone` also marks when you are not the leader, `/pkm mark leader` restores the default
 - `/pkm mark priority` / `/pkm mark ignore` - always kill your target's NPC first, or never mark it; repeat to undo
 - `/pkm mark clear` - remove raid icons (on Forever, use the Clear All Marks key binding)
-- `/pkm hop` - send an AutoLayer request for any layer, even when your current layer is known. Left-clicking the layer display does the same, and right-clicking it opens the AutoLayer Hopper
 - `/pkm resetmoon` - restore the default position of the Forever day/night icon when icon alignment is off
 - `/pkm options` - open the Prokin Minimap options window
 
