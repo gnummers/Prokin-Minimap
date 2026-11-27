@@ -1,3 +1,7 @@
+## v1.0.59
+- Added friends and guild on the world map, adapted from OpenMap. Online friends, Battle.net friends playing WoW on your faction, and guild members show on Blizzard's world map: a badge on the zone they're in, with who's there in its tooltip, or a class-coloured dot where they stand if they share their location. Both can be turned off in Options
+- Your location is shared by default with your guild and with friends who use Prokin Minimap or OpenMap, so you show on their world map. Untick "Share my location with friends and guild" in Options to stop; Prokin says so in chat the first time it shares. It uses OpenMap's message format, so Prokin Minimap and OpenMap users see each other. Your location is never sent inside dungeons, raids or battlegrounds, or while Battle.net shows you as offline. With OpenMap installed, its own sharing setting is used instead
+
 ## v1.0.58
 - Added an Options switch to show or hide Friends and Guild roster output in the Prokin icon tooltip
 - Added a matching green and gold Guild button badge based on the supplied Friends artwork

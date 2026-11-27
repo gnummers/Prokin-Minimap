@@ -3005,6 +3005,12 @@ local function SyncOptionsWindow()
 	optionsFrame.showLoadAnnouncement:SetChecked(db.showLoadAnnouncement ~= false)
 	optionsFrame.enableGoldTracking:SetChecked(db.goldTracker and db.goldTracker.goldTrackingEnabled ~= false)
 	optionsFrame.showRevelationAlert:SetChecked(db.showRevelationAlert ~= false)
+	local friendMap = _G.ProkinMinimapFriendMap
+	local friendSettings = friendMap and friendMap.Settings()
+	optionsFrame.friendsOnMap:SetChecked(friendSettings and friendSettings.friends)
+	optionsFrame.guildOnMap:SetChecked(friendSettings and friendSettings.guild)
+	optionsFrame.shareLocation:SetChecked(friendSettings and friendSettings.share)
+	optionsFrame.shareLocation:SetEnabled(friendMap ~= nil and not friendMap.OpenMapLoaded())
 	local marker = _G.ProkinMinimapMarker
 	optionsFrame.smartMarking:SetChecked(marker and marker.GetSettings().enabled)
 	optionsFrame.smartMarking:SetEnabled(marker ~= nil)
@@ -3358,7 +3364,42 @@ local function EnsureOptionsWindow()
 	end)
 
 	frame.smartMarking = CreateOptionsCheckbox(frame, 'Smart dungeon marking', 'Plan raid target icons for the nearby pack. WoW Forever and combat lockdown use secure key presses; Mark Pack remains available in combat for the pack prepared before lockdown. /pkm mark has more options.')
-	frame.smartMarking:SetPoint('TOPLEFT', frame.showRevelationAlert, 'BOTTOMLEFT', 0, -8)
+	-- Friends and guild on Blizzard's world map (Prokin-Minimap-FriendMap.lua).
+	local function SetFriendMapOption(key, value)
+		local friendMap = _G.ProkinMinimapFriendMap
+		if not friendMap then
+			return
+		end
+		local settings = friendMap.Settings()
+		settings[key] = value
+		friendMap.dirty = true
+		if key == 'share' then
+			settings.shareChosen = true
+			Print(value and 'Sharing your location with your guild and with friends who use Prokin Minimap or OpenMap. It is never sent inside instances or while you appear offline.' or 'Stopped sharing your location.')
+		end
+	end
+
+	frame.friendsOnMap = CreateOptionsCheckbox(frame, 'Friends on the world map', 'Show online friends and Battle.net friends on the world map: a badge on the zone they are in, or a dot where they stand if they share their location.')
+	frame.friendsOnMap.text:SetWidth(170)
+	frame.friendsOnMap:SetPoint('TOPLEFT', frame.showRevelationAlert, 'BOTTOMLEFT', 0, -8)
+	frame.friendsOnMap:SetScript('OnClick', function(self)
+		SetFriendMapOption('friends', self:GetChecked() and true or false)
+	end)
+
+	frame.guildOnMap = CreateOptionsCheckbox(frame, 'Guild on the world map', 'Show online guild members on the world map, the same way as friends.')
+	frame.guildOnMap.text:SetWidth(170)
+	frame.guildOnMap:SetPoint('LEFT', frame.friendsOnMap.text, 'RIGHT', 20, 0)
+	frame.guildOnMap:SetScript('OnClick', function(self)
+		SetFriendMapOption('guild', self:GetChecked() and true or false)
+	end)
+
+	frame.shareLocation = CreateOptionsCheckbox(frame, 'Share my location with friends and guild', 'Send where you are to your guild and to friends who use Prokin Minimap or OpenMap, so you show as a dot on their map. On by default; untick to stop sharing. Never sent inside dungeons, raids or battlegrounds, or while Battle.net shows you as offline. When OpenMap is installed, use its own sharing setting instead.')
+	frame.shareLocation:SetPoint('TOPLEFT', frame.friendsOnMap, 'BOTTOMLEFT', 0, -8)
+	frame.shareLocation:SetScript('OnClick', function(self)
+		SetFriendMapOption('share', self:GetChecked() and true or false)
+	end)
+
+	frame.smartMarking:SetPoint('TOPLEFT', frame.shareLocation, 'BOTTOMLEFT', 0, -8)
 	frame.smartMarking:SetScript('OnClick', function(self)
 		local marker = _G.ProkinMinimapMarker
 		if marker then
