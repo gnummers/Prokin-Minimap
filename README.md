@@ -12,6 +12,7 @@ Prokin-Minimap is a World of Warcraft addon for **The Burning Crusade Anniversar
 - Adds a draggable Prokin minimap button bordering the minimap with left-click role check, right-click options, and a hover tooltip that lists the current party or raid roles
 - Adds online Friends and Guild roster counts and member locations to the minimap button tooltip, following ElvUI's hover roster behavior
 - Adds dedicated Friends and Guild hover buttons below the minimap, to the right of the player coordinates, with class-colored online rosters and member locations
+- Shows online friends, Battle.net friends and guild members on the world map: a badge on the zone they're in, or a class-coloured dot where they stand if they share their location (works with OpenMap users). Your own location is shared with your guild and with friends who use Prokin Minimap or OpenMap by default, never inside instances or while you appear offline; untick "Share my location with friends and guild" in Options to stop
 - Shows the current session Gold Per Hour (GPH) in the Prokin minimap button tooltip
 - Uses TradeSkillMaster-style item pricing when available, with vendor fallback if TradeSkillMaster is not installed
 - Tracks gold income and expenses including repairs, postage, and crafting material costs
@@ -143,6 +144,15 @@ GitHub: <https://github.com/gnummers/Prokin-Minimap>
 ## Credits
 
 - Smart marking's Classic and WoW Forever dungeon boss names come from [AKForeverTargeter](https://github.com/ajkatz/AKForeverTargeter) by Purrdee, under the MIT License (the notice is in `Prokin-Minimap-MarkerData.lua`). NPC IDs were looked up on Wowhead and cross-checked with the AzerothCore creature database.
+- Friends and guild on the world map (`Prokin-Minimap-FriendMap.lua`) is adapted from [OpenMap](https://www.curseforge.com/wow/addons/openmap)'s friends feature and uses its location message format, so the two addons see each other. OpenMap is under the MIT License:
+
+  > Copyright (c) 2026 OpenMap contributors
+  >
+  > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 - Thanks to the TradeSkillMaster authors for the pricing model inspiration.
 
 ## License
